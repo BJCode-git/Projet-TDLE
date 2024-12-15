@@ -1,0 +1,318 @@
+services: 
+  ### Mongo Standalone ###
+
+    mongo-standalone:
+      container_name: 'mongo-standalone-container'
+      image: 'mongo:7.0.0'
+      command: ["--bind_ip_all", "--port", "27017"]
+      ports:
+        - 27017:27017
+      volumes:
+        - mongodata:/data-alone/db
+        - mongoconfig:/data-alone/configdb
+      env_file:
+        - .env
+
+  ### End Standalone ###
+
+#### Mongo Replica Set ####
+
+  ### Mongo Replica1  ###
+    mongo-replica1:
+      image: mongo:7.0.0
+      command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27018"]
+      ports:
+        - 27018:27018
+      #  env_file:
+      #    - .env
+      #  environment:
+      #    - MONGO_INITDB_ROOT_USERNAME=${MONGO_USER}
+      #    - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASS}
+      #    - MONGO_INITDB_DATABASE=${MONGO_DATABASE}
+      #    - MONGO_INITDB_REPLICA_SET=${MONGO_REPLICA_SET}
+      #    #- MONGO_INITDB_COLLECTION=${MONGO_COLLECTION}
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
+      healthcheck:
+        test: echo "try { 
+                        rs.status() 
+                    } 
+                    catch (err) { 
+                      rs.initiate(
+                                    {
+                                      _id:'rs0',
+                                      members:[
+                                                {_id:0,host:'host.docker.internal:27018',priority:1},
+                                                {_id:1,host:'host.docker.internal:27019',priority:0.5},
+                                                {_id:2,host:'host.docker.internal:27020',priority:0.5}
+                                              ]
+                                    }
+                                  ) 
+                      }" 
+              | mongosh --port 27018 --quiet
+        interval: 5s
+        timeout: 30s
+        start_period: 0s
+        start_interval: 1s
+        retries: 30
+      volumes:
+        - "mongo-replica1_data:/data/db"
+        - "mongo-replica1_config:/data/configdb"
+    
+    ### End Replica1 ###
+
+    ### Mongo Replica2  ###
+    mongo-replica2:
+      image: mongo:7.0.0
+      command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27019"]
+      ports:
+        - 27019:27019
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
+      volumes:
+        - "mongo-replica2_data:/data/db"
+        - "mongo-replica2_config:/data/configdb"
+
+    ### End Replica2 ###
+
+    ### Mongo Replica3  ###
+    mongo-replica3:
+      image: mongo:7.0.0
+      command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27020"]
+      ports:
+        - 27020:27020
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
+      volumes:
+        - "mongo-replica3_data:/data/db"
+        - "mongo-replica3_config:/data/configdb"
+    ### End Replica3 ###
+
+    ### Initiate Replica Set ###
+    mongo-replica-initiate:
+      image: mongo:7.0.0
+      command: ["--eval", 
+                "rs.initiate({
+                              _id:'rs0',
+                              members:  [
+                                          {_id:0,host:'mongo-replica1:27018',priority:1},
+                                          {_id:1,host:'mongo-replica2:27019',priority:0.5},
+                                          {_id:2,host:'mongo-replica3:27020',priority:0.5}
+                                        ]
+                            })
+               "]
+      depends_on:
+        - mongo-replica1
+        - mongo-replica2
+        - mongo-replica3
+      extra_hosts: 
+        - "host.docker.internal:host-gateway"
+      
+      ### End Initiate Replica Set ###
+
+  ### End Replica Set ###
+
+#### Mongo Shards ####
+
+  ### Mongo Router ###
+
+    mongo-router:
+      container_name: mongo-router
+      image: mongo:7.0.0
+      command: mongos --configdb configserver/configserver1:27110,configserver2:27111,configserver3:27112 --bind_ip_all --port 27115
+      ports:
+        - 27115:27115
+      volumes:
+        - mongo-router:/data/db
+
+  ### End Router ###
+
+  ### Mongo Config Server ###
+  
+    configserver1:
+      container_name: configserver1
+      image: mongo:7.0.0
+      command: mongod --configsvr --replSet configserver --dbpath /data/db --port 27110
+      ports:
+        - 27110:27110
+      volumes:
+        - configserver1:/data/db
+
+    configserver2:
+      container_name: configserver2
+      image: mongo:7.0.0
+      command: mongod --configsvr --replSet configserver --dbpath /data/db --port 27111
+      ports:
+        - 27111:27111
+      volumes:
+        - configserver2:/data/db
+
+    configserver3:
+      container_name: configserver3
+      image: mongo:7.0.0
+      command: mongod --configsvr --replSet configserver --dbpath /data/db --port 27112
+      ports:
+        - 27112:27112
+      volumes:
+        - configserver3:/data/db
+
+  ### Mongo Shard 1 ###
+
+    shardsvr1_1:
+      container_name: shardsvr1_1
+      image: mongo:7.0.0
+      command: mongod --shardsvr --replSet shard1_rs --dbpath /data/db --port 27117
+      ports:
+        - 27117:27117
+      volumes:
+        - shardsvr1_1:/data/db
+
+    shardsvr1_2:
+      container_name: shardsvr1_2
+      image: mongo:7.0.0
+      command: mongod --shardsvr --replSet shard1_rs --dbpath /data/db --port 27118
+      ports:
+        - 27118:27118
+      volumes:
+        - shardsvr1_2:/data/db
+
+    shardsvr1_3:
+      container_name: shardsvr1_3
+      image: mongo:7.0.0
+      command: mongod --shardsvr --replSet shard1_rs --dbpath /data/db --port 27119
+      ports:
+        - 27119:27119
+      volumes:
+        - shardsvr1_3:/data/db
+
+  ### End Shard 2 ###
+
+  ### Mongo Shard 2 ###
+
+    shardsvr2_1:
+      container_name: shardsvr2_1
+      image: mongo:latest
+      command: mongod --shardsvr --replSet shard2_rs --dbpath /data/db --port 27217
+      ports:
+        - 27217:27217
+      volumes:
+        - shardsvr2_1:/data/db
+
+    shardsvr2_2:
+      container_name: shardsvr2_2
+      image: mongo:latest
+      command: mongod --shardsvr --replSet shard2_rs --dbpath /data/db --port 27218
+      ports:
+        - 27218:27218
+      volumes:
+        - shardsvr2_2:/data/db
+
+    shardsvr2_3:
+      container_name: shardsvr2_3
+      image: mongo:latest
+      command: mongod --shardsvr --replSet shard2_rs --dbpath /data/db --port 27219
+      ports:
+        - 27219:27219
+      volumes:
+        - shardsvr2_3:/data/db
+  ### End Shard 2 ###
+  mongo-sharded-initiate:
+    container_name: mongo-sharded-cluster
+    image: mongo:7.0.0
+    # La base de données est test.
+    # La collection est test et la clé de sharding est _id
+    command: >
+      bash -c '
+      sleep 10 &&
+      # on initialise les config servers
+      mongosh mongo-router:27115/admin --eval "rs.initiate(
+                                                        {
+                                                          _id: "configserver",
+                                                          configsvr: true,
+                                                          members: [
+                                                            { _id : 0, host : "configserver1:27110" },
+                                                            { _id : 1, host : "configserver2:27111" },
+                                                            { _id : 2, host : "configserver3:27112" }
+                                                          ]
+                                                        }
+                                                      )" &&
+      # on initialise le shard 1
+      mongosh shardsvr1_1:27117/admin --eval "rs.initiate(
+                                                        {
+                                                          _id: "shard1_rs",
+                                                          members: [
+                                                            { _id : 0, host : "shardsvr1_1:27117" },
+                                                            { _id : 1, host : "shardsvr1_2:27118" },
+                                                            { _id : 2, host : "shardsvr1_3:27119" }
+                                                          ]
+                                                        }
+                                                      )" &&
+      # on initialise le shard 2                                                
+      mongosh shardsvr2_1:27217/admin --eval "rs.initiate(
+                                                        {
+                                                          _id: "shard2_rs",
+                                                          members: [
+                                                            { _id : 0, host : "shardsvr2_1:27217" },
+                                                            { _id : 1, host : "shardsvr2_2:27218" },
+                                                            { _id : 2, host : "shardsvr2_3:27219" }
+                                                          ]
+                                                        }
+                                                      )" &&
+      # on configure le router pour les shards  
+      mongosh mongo-router:27115/admin --eval "sh.addShard(\"shard1_rs/shardsvr1_1:27117,shardsvr1_2:27118,shardsvr1_3:27119\")" &&
+      mongosh mongo-router:27115/admin --eval "sh.addShard(\"shard2_rs/shardsvr2_1:27217,shardsvr2_2:27218,shardsvr2_3:27219\")" &&
+      # on crée la base de données test si elle n'existe pas
+      mongosh mongo-router:27115/admin --eval "db.getSiblingDB(\"test\").createCollection(\"test\")" &&
+      # on active le sharding sur la base de données test
+      mongosh mongo-router:27115/admin --eval "sh.enableSharding(\"test\")" &&
+      mongosh mongo-router:27115/admin --eval "sh.shardCollection(\"test.test\", { _id: \"hashed\" })" &&
+      mongosh mongo-router:27115/admin --eval "sh.status()"'
+    depends_on:
+      - mongo-router
+      - shardsvr1_1
+      - shardsvr1_2
+      - shardsvr1_3
+      - shardsvr2_1
+      - shardsvr2_2
+      - shardsvr2_3
+    
+
+
+### End Mongo Shards ###
+
+
+volumes:
+  # Mongo Standalone
+  mongodata:
+  mongoconfig:
+
+  # Mongo Replica Set
+  mongo-replica1_data:
+  mongo-replica2_data:
+  mongo-replica3_data:
+  mongo-replica1_config:
+  mongo-replica2_config:
+  mongo-replica3_config:
+  
+  # Mongo Shards
+
+  ## mongo router
+  mongo-router:
+
+  ## mongo config server
+  configserver1:
+  configserver2:
+  configserver3:
+
+  ## mongo shard 1
+  shardsvr1_1:
+  shardsvr1_2:
+  shardsvr1_3:
+
+  ## mongo shard 2
+  shardsvr2_1:
+  shardsvr2_2:
+  shardsvr2_3:
+
+  
+#networks:
