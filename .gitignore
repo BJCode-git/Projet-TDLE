@@ -1,4 +1,9 @@
+__pycache__
 __pycache__/
+__pycache__/*
+
 *.pyc
+
 .vscode/
+
 docker-compose-old.yml
