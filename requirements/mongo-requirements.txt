@@ -4,3 +4,4 @@ python-dotenv
 py-cpuinfo
 psutil
 matplotlib
+alive-progress

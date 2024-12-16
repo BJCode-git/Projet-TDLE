@@ -1,14 +1,18 @@
 
-from os import getenv
+from os import getenv, makedirs
 from dotenv import load_dotenv
 
 import pymysql
 
 from time import perf_counter_ns as time_ns
 
+from numpy import arange
+
 # For generating data and handling data
-from  generate_data import extract_books_from_file, extract_updated_books_from_file, Book
-from  generate_data import num_records, num_records_per_many, generated_file, updated_file
+from generate_data import extract_books_from_file, extract_updated_books_from_file
+from generate_data import generate_book,Book , modify_book 
+from generate_data import num_records, num_records_per_many, generated_file, updated_file, get_configuration
+
 
 # for graphing
 import matplotlib.pyplot as plt
@@ -22,10 +26,18 @@ from cpuinfo import get_cpu_info
 from logging import getLogger, basicConfig, INFO, DEBUG, ERROR, FileHandler
 from sys import stderr
 
+# For animation
+from alive_progress import alive_bar
+from threading import Thread, Lock, Event
+
 
 operation_times		= {}
 failed_operations	= {}
 system_info			= ""
+operations_done		= 0
+operation_lock		= Lock()
+operation_Event		= Event()
+
 
 def add_operation_time(operation, time):
 	"""
@@ -86,6 +98,13 @@ class MySQL:
 	def __del__(self):
 		self.close()
 		self.logger.info("MySQL object deleted")
+
+	def __update_operation_count(self):
+		global operations_done, operation_Event, operation_lock
+		with operation_lock:
+			operations_done += 1
+			operation_Event.clear()
+			operation_Event.set()
 
 	def close(self):
 		if self.connection:
@@ -266,15 +285,16 @@ class MySQL:
 			self.create_index(index.name, index.columns)
 
 
-#### Utilitaires ####
+######### Utilitaires #########
 
-def get_system_info():
+def print_system_info():
 	"""
 	Display system information
 	"""
 	global system_info
 	if system_info == "":
 		system_info = f"Python : {python_version()}\nSystem : {system()} {release()}\nMachine : {machine()} {architecture()[0]}\nCPU : {get_cpu_info()['brand_raw']} - {cpu_count(logical=False)} cores - {cpu_count(logical=True)} threads\nRAM : {int(virtual_memory().total/1024**3)} Go"
+	print(system_info)
 
 def print_failed_operations():
 	"""
@@ -289,33 +309,89 @@ def print_failed_operations():
 				print(f"\t\t**Query : {query}")
 				print(f"\t\t**Message : {message}")
 
-def plot_operation_times(test_name=""):
+	failed_operations.clear()
+
+def violin_plot_operation_times(test_name=""):
 	"""
 	Plot the times of the operations
 	"""
 	global operation_times
-	# On va créer un graphique pour chaque opération
+	
+	# On crée un dossier pour les graphiques
+	makedirs(f"plots/MongoDB", exist_ok=True)
+	makedirs(f"plots/MongoDB/{test_name}", exist_ok=True)
+ 
+	# On va créer un graphique pour chaque opération, on affiche que l'opération courante
 	for operation in operation_times:
-		plt.plot(operation_times[operation], label=operation,scalex=True,scaley=True)
-		plt.title('Time of operations')
-		plt.xlabel(test_name+ operation )
+
+		plt.violinplot(operation_times[operation],
+						showmeans=True, showextrema=True, 
+						showmedians=True, quantiles=None,
+						points=len(operation_times[operation])
+						)	
+		plt.title("Temps mesuré pour réaliser l\'opération")
+
+		plt.xlabel("Occurence de l'opération : " + operation)
 		plt.ylabel('Time (µs)')
 		#plt.annotate(system_info, (0,0), (0, -40), xycoords='axes fraction', textcoords='offset points', va='top')
+		#plt.legend()
+		# On sauvegarde la figure
+		plt.savefig(f"plots/MongoDB/{test_name}/{operation}.png")
+
+		# On réinitialise le graphique
+		plt.clf()
+
+def plot_operation_times( data = dict, test_name=""):
+	"""
+		Affiche le temps des opérations selon la quantité de données dans la base de données
+	"""
+	global operation_times
+
+	# On crée un dossier pour les graphiques
+	makedirs(f"plots/MongoDB", exist_ok=True)
+	makedirs(f"plots/MongoDB/{test_name}", exist_ok=True)
+ 
+	# On va créer un graphique pour chaque opération, on affiche que l'opération courante
+	for operation in data:
+		# On récupère les données de temps en y et les données en x (quantité de données)
+		x = [data[operation][i][0] for i in range(len(data[operation]))]
+		y = [data[operation][i][1] for i in range(len(data[operation]))]
+		# On affiche les données en x et en y
+		plt.plot(x,y, label=f"{operation} : µs" )
+		plt.title("Temps d'opération en fonction de la quantité de données")
+		plt.xlabel("Données dans la base de données")
+		plt.ylabel('Time (µs)')
 		plt.legend()
-		plt.savefig(f"plots/MySQL_{test_name}_{operation}.png")
-		#plt.show()
+
+		# On sauvegarde la figure
+		plt.savefig(f"plots/MongoDB/{test_name}/{operation}.png")
+
+		# On réinitialise le graphique
+		plt.clf()
+	
+	if len(data) == 0:
+		print("No data to plot")
 
 
+######### Tests de performance #########
 
-###### Tests de performance ######
-	###### tries < max_triess avec une seule instance ######
-
-def test(mysql: MySQL,plot_name :str):
+def global_test_one(mysql: MySQL,plot_name :str ,  nb_data:int = num_records):
 	global num_records_per_many, generated_file, updated_file
  
-	# On récupère les données
-	dataset = extract_books_from_file(generated_file)
+	mysql.logger.info("Test global one by one " + plot_name)
+ 
+	if nb_data < 0:
+		raise ValueError("nb_data must be > 0 and <= " + str(num_records))
 
+	# On récupère les données
+	dataset = extract_books_from_file(generated_file,nb_data)
+
+	if len(dataset) < nb_data:
+		mysql.logger.warning(f"Gathered {len(dataset)} records instead of {nb_data}")
+ 
+  
+	nb_data = len(dataset)
+	
 	### Tests avec données une par une  ###
  
 	## Test d'insertion de données
@@ -323,10 +399,18 @@ def test(mysql: MySQL,plot_name :str):
 	for book in dataset:
 		mysql.create_one(book.__dict__)
 
+	# Libérer la mémoire
+	dataset.clear()
+ 
+	## Test de lecture de données sur la collection "Books", en choississant l'id
+	mysql.logger.debug("Test read one by one : ")
+	for i in range(0,nb_data):
+		mysql.read_one({"id":i},print_result=False)
+
 	## Test de mise à jour de données
  
 	# Chargement des données à modifier
-	updated_dataset = extract_updated_books_from_file(updated_file)
+	updated_dataset = extract_updated_books_from_file(updated_file,nb_data)
 	# note : update_dataset contains the original and modified data
 	
 	for update in updated_dataset:
@@ -345,32 +429,63 @@ def test(mysql: MySQL,plot_name :str):
 					break
 			mysql.update_one(update[0].__dict__,{ "$set": new_values})
 			
-  
-	## Test de lecture de données
-	## Test de lecture de données sur la collection "Books", en choississant l'id
-	mysql.logger.debug("Test read one by one : ")
-	for i in range(0,len(dataset)):
-		mysql.read_one({"id":i},print_result=False)
 
-	
 	## Test de suppression de données
 	mysql.logger.debug("Test delete one by one : ")
 	for _,book in updated_dataset:
 		mysql.delete_one(book.__dict__)
-	
-	# On a normalement supprimé toutes les données !
 
+	# Dessiner les graphiques
+	try:
+		violin_plot_operation_times(plot_name)
+	except Exception as e:
+		mysql.logger.error(f"global_test_one : error plotting -> {e}")
+
+	
+	# Afficher les opérations qui ont échoué
+	#print_failed_operations()
+ 
+	# On supprime toutes les données de la collection
+	mysql.drop_all()	
+ 
+	# On réinitialise les données des opérations
+	mysql.clear_operation_data()
+
+def global_test_many(mysql: MySQL,plot_name :str, nb_data:int = num_records):
+	global updated_file, generated_file, num_records_per_many, num_records
+
+	mysql.logger.info("Test global many" + plot_name)
 
 	### Tests avec plusieurs données à la fois  ###
+	
+	if nb_data  < 0: 
+		raise ValueError("nb_data must be > 0 and <= " + str(num_records_per_many))
+
+	# On récupère les données
+	dataset = extract_books_from_file(generated_file,nb_data)
+
+	if len(dataset) < nb_data:
+		mysql.logger.warning(f"Gathered {len(dataset)} records instead of {nb_data}")
+	
+	nb_data = len(dataset)
+	
 	# On envoie à chaque fois num_records_per_many données
 	
 	## Test d'insertion de données
 	mysql.logger.debug("Test insert many : ")
-	for i in range(0,len(dataset),num_records_per_many):
+	for i in range(0,nb_data,num_records_per_many):
 		data = [book.__dict__ for book in dataset[i:i+num_records_per_many]]
 		mysql.create_many(data)
+
+	# vide dataset pour libérer la mémoire
+	dataset.clear()
  
 	## Test de mise à jour de données
+	
+	# Chargement des données à modifier
+	updated_dataset = extract_updated_books_from_file(updated_file,nb_data)
+	# note : update_dataset contains the original and modified data
+ 
 	mysql.logger.debug("Test update many : ")
 	for i in range(0,len(updated_dataset),num_records_per_many):
 		# On met à jour les données
@@ -381,7 +496,7 @@ def test(mysql: MySQL,plot_name :str):
  
 	## Test de lecture de données
 	mysql.logger.debug("Test read all : ")
-	dataset = mysql.read(print_result=False)
+	mysql.read(print_result=False)
 
 	## Test de suppression de données
 	mysql.logger.debug("Test delete many : ")
@@ -389,25 +504,170 @@ def test(mysql: MySQL,plot_name :str):
 		# On supprime les données
 		mysql.delete_many({"ran" : i})
 
-	mysql.logger.debug("Data read : ")
-	for data in dataset:
-		mysql.logger.debug(data)
-
 
 	# Dessiner les graphiques
-	plot_operation_times(plot_name)
+	try:
+		violin_plot_operation_times(plot_name)
+	except Exception as e:
+		mysql.logger.error(f"global_test_many : error plotting -> {e}")
 	
 	# Afficher les opérations qui ont échoué
-	print_failed_operations()
+	#print_failed_operations()
  
 	# On supprime toutes les données de la collection
-	#mysql.drop_all()
+	mysql.drop_all()
  
 	# On réinitialise les données des opérations
 	mysql.clear_operation_data()
 
-def test_with_index(mysql: MySQL,plot_name :str):
-    
+def test_one_various_data(mysql: MySQL,plot_name :str, steps=arange(1000,num_records,num_records/1000)):
+	"""
+		On teste le temps des opérations avec différentes quantités de données initiales dans la base de données
+ 	"""
+	global operation_times, generated_file
+
+	mysql.logger.info("Test one by one with various data "+ plot_name)
+ 
+	tests_data = {}
+	for step in steps:
+		
+		# On supprime toutes les données de la collection s'il y en a
+		mysql.drop_all()
+
+		# On va extraire les données, pour opérer sur les mêmes données
+		dataset = extract_books_from_file(generated_file,step)
+  
+		if len(dataset) < step:
+			mysql.logger.error(f"Gathered {len(dataset)} records instead of {step}")
+
+		# On va insérer les données
+		for book in dataset:
+			mysql.create_one(book.__dict__)
+
+		# On nettoie dataset pour libérer la mémoire
+		dataset.clear()
+		
+		# On nettoie les temps des opérations, 
+		# pour recommencer les mesures
+		operation_times.clear()
+
+		# On procède au test de performance
+  
+		generate_book.id = dataset[-1]["id"] + 1
+		book = generate_book(dataset[-1]["id"] + 1)
+
+		# On teste l'insertion
+		mysql.create_one(book)
+
+		# On teste la lecture
+		mysql.read_one({"id":book["id"]})
+
+		# On teste la mise à jour
+		new_book = modify_book(book)
+		mysql.update_one({"id":book["id"]}, {"$set": new_book.__dict__})
+	
+		# On teste la suppression
+		mysql.delete_one({"id":book["id"]})
+
+		# On récupère les temps des opérations
+		data = operation_times.copy()
+
+		# On ajoute les données dans le tableau
+		for operation in data:
+			if operation in tests_data:
+				tests_data[operation].append((step,data[operation]))
+			else:
+				tests_data[operation] = [[step,data[operation]]]
+
+	# On dessine les graphiques
+	try:
+		plot_operation_times(tests_data,plot_name)
+	except Exception as e:
+		mysql.logger.error(f"test_one_various_data : error plotting -> {e}")
+ 
+	# On supprime toutes les données de la collection
+	mysql.drop_all()
+
+def test_many_various_data(mysql: MySQL,plot_name :str, steps=arange(1000,num_records,num_records/1000)):
+	"""
+		On teste le temps des opérations avec différentes quantités de données initiales dans la base de données
+	"""
+	global operation_times, generated_file
+ 
+	mysql.logger.info("Test many with various data " + plot_name)
+
+	tests_data = {}
+	for step in steps:
+		
+		# On supprime toutes les données de la collection s'il y en a
+		mysql.drop_all()
+
+		# On va extraire les données, pour opérer sur les mêmes données
+		dataset = extract_books_from_file(generated_file,step)
+  
+		if len(dataset) < step:
+			mysql.logger.error(f"Gathered {len(dataset)} records instead of {step}")
+			break
+
+		# On va insérer les données
+		max_id = 0
+		for book in dataset:
+			mysql.create_one(book.__dict__)
+			if book["id"] > max_id:
+				max_id = book["id"]
+
+		# On nettoie dataset pour libérer la mémoire
+		dataset.clear()
+		
+		# On nettoie les temps des opérations, 
+		# pour recommencer les mesures
+		operation_times.clear()
+
+		## On procède au test de performance
+
+		# Génère les données à insérer
+		max_id 				= max_id + 1
+		generate_book.id 	= max_id
+
+		books = [generate_book(max_id + i) for i in range(0,num_records_per_many)]
+		# Modifie le prix à 0 pour la suppression/lecture exacte de num_records_per_many données
+		# en effet un prix à 0 est impossible pour un livre, ce seront donc les données à supprimer
+		for i in range(0,len(books)):
+			books.price = 0.0
+
+		# On teste l'insertion
+		mysql.create_many([book.__dict__ for book in books])
+
+		# On teste la lecture
+		mysql.read_many({"price":0.0})
+
+		# On teste la mise à jour
+		new_book = modify_book(book)
+		mysql.update_one({"id":book["id"]}, {"$set": new_book.__dict__})
+	
+		# On teste la suppression
+		mysql.delete_many({"price":0.0})
+
+		# On récupère les temps des opérations
+		data = operation_times.copy()
+
+		# On ajoute les données dans le tableau
+		for operation in data:
+			if operation in tests_data:
+				tests_data[operation].append((step,data[operation]))
+			else:
+				tests_data[operation] = [[step,data[operation]]]
+	
+	# On dessine les graphiques
+	try:
+		plot_operation_times(tests_data,plot_name)
+	except Exception as e:
+		mysql.logger.error(f"test_many_various_data: error plotting -> {e}")
+  
+	# On supprime toutes les données de la collection	
+	mysql.drop_all()
+
+def test_indexed(mysql: MySQL,plot_name :str, test_function,**kwargs):
 	# On définit les index
 	indexes = [	IndexModel("id", unique=True), 
 				IndexModel("title"), 
@@ -417,62 +677,150 @@ def test_with_index(mysql: MySQL,plot_name :str):
 				IndexModel("copies_sold"),
 				IndexModel("ran")]
 	mysql.logger.debug("Creating indexes...")
+	# On efface les index si existants
+	mysql.drop_indexes()
+	# On crée les index
 	mysql.create_indexes(indexes)
 	
 	# on va faire les mêmes tests que précédemment
-	test(mysql,plot_name)
+	test_function(mysql,plot_name,**kwargs)
+
+def run_tests(mysql: MySQL, type_test:str):
+	# Without indexed tests
+	try:
+		if mysql is None:
+			raise ValueError("MySQL instance is None")
+
+		# Supprimer les index si existants
+		mysql.drop_indexes()
+		#try:
+		#	global_test_one(mysql, type_test + "_global_one")
+		#except Exception as e:
+		#	mysql.logger.error(f"Error with global_test_one : {e}")
+		#try:
+		#	global_test_many(mysql, type_test + "_global_many")
+		#except Exception as e:
+		#	mysql.logger.error(f"Error with global_test_many : {e}")
+		try:
+			test_one_various_data(mysql, type_test + "_various_one")
+		except Exception as e:
+			mysql.logger.error(f"Error with test_one_various_data : {e}")
+		try:
+			test_many_various_data(mysql, type_test + "_various_many")
+		except Exception as e:
+			mysql.logger.error(f"Error with test_many_various_data : {e}")
+   
+   
+		# With indexed tests
+		try:
+			test_indexed(mysql, type_test + "_global_one_indexed", global_test_one)
+		except Exception as e:
+			mysql.logger.error(f"Error with global_test_one_indexed : {e}")
+		try:
+			test_indexed(mysql, type_test + "_global_many_indexed", global_test_many)
+		except Exception as e:
+			mysql.logger.error(f"Error with global_test_many_indexed : {e}")
+		try:
+			test_indexed(mysql, type_test + "_various_one_indexed", test_one_various_data)
+		except Exception as e:
+			mysql.logger.error(f"Error with test_one_various_data_indexed : {e}")
+		try:
+			test_indexed(mysql, type_test + "_various_many_indexed", test_many_various_data)
+		except Exception as e:
+			mysql.logger.error(f"Error with test_many_various_data_indexed : {e}")
+  
+	except Exception as e:
+		print(f"run_tests : error -> {e}")
+		raise e
+	
+
+def print_progress(total,text="Running tests..."):
+	global operations_done, operation_Event	
+ 
+	with alive_bar(total) as bar:
+		bar.text(text)
+		print_progress.run = True
+		# Attendre operation_Event
+		while operations_done < total and print_progress.run:
+			operation_Event.wait()
+			operation_Event.clear()
+			bar()
+			bar.text(print_progress.text)
+
+		bar.text(f"Operations done !")
+print_progress.run		= True
+print_progress.text		="Running tests..."
+
 
 if __name__ == "__main__":
 
-	get_system_info()
-	
-	#try:
-	# Test avec une seule instance sans index
-	mysql = MySQL()
-	mysql.logger.info(system_info)
-	mysql.logger.info("\n\nTest avec une seule instance sans index\n\n")
-	test(mysql, "single_instance")
-	
-	# Test avec une seule instance avec index
-	mysql.logger.info("\n\nTest avec une seule instance avec index\n\n")
-	test_with_index(mysql,"single_instance_with_index")
+	# On affiche les informations système
+	print_system_info()
 
-	# On fermes les connexions
-	mysql.close()
-	#except Exception as e:
-	#	print("Test avec instance unique échoué")
-	# 	print(f"Error : {e}")
+	# On charge la configuration
+	get_configuration()
+ 
+	# calcul le nombre total d'opérations à effectuer pour une seule instance de run_tests
+ 
+	# opérations pour 2 test_various_one = 2 * len(steps) * ( update_one + read_one + create_one + delete_one) = 8 * len(steps)
+	# opérations pour 2 test_various_many = 2 * len(steps) * ( update_many + read_many + create_many + delete_many) = 8 * len(steps)
+	# opérations pour 2 test_one = 2 * ( update_one + read_one + create_one + delete_one) * num_records = 16 * num_records
+	# opérations pour 2 test_many = 2 * ( update_many + read_many + create_many + delete_many)* num_records/num_records_per_many = 16 * num_records/num_records_per_many
+ 	# Au total -> 8 * len(steps) + 8 * len(steps) + 16 * num_records + 16 * num_records/num_records_per_many = 
+	# 
+	
+
+	steps = arange(1000,num_records,num_records/1000)
+	total =  int(16 * (len(steps) +  num_records + num_records/num_records_per_many ))
+	del steps
+	
+	progress_T = Thread(target=print_progress, args=((total,)) )
+	progress_T.start()
+	
+	errors = ""
+	
+	try:
+		mysql_standalone = MySQL(debug_level=INFO)
+		print_progress.text = "Tests en mode standalone..."
+		run_tests(mysql_standalone, "single_instance")
+	except Exception as e:
+		print(f"Erreur avec le test en standalone: {e}")
+		errors += f"Erreur avec le test en standalone: {e}\n"
+	finally:
+		if mysql_standalone is not None:
+			del mysql_standalone
+	
 
 	try:
-		mysql = MySQL(using_replica_set=True)
+		mysql_replica = MySQL(using_replica_set=True,debug_level=INFO)
+		print_progress.text = "Tests en mode Replica..."
+		run_tests(mysql_replica, "replica_set")
+		del mysql_replica
+	except Exception as e:
+		print(f"Erreur avec le test avec Replica Set: {e}")
+		errors += f"Erreur avec le test avec Replica Set: {e}\n"
+	finally:
+		if mysql_replica is not None:
+			del mysql_replica
   
-		# Test avec réplication et sans index
-		mysql.logger.info("\n\nTest avec réplication et sans index \n\n")
-		test(mysql, "replication")
-	
-		# Test avec réplication et avec index
-		mysql.logger.info("\n\nTest avec réplication et avec index \n\n")
-		test_with_index(mysql, "replication_with_index")
-		
-		mysql.close()
-	except Exception as e:
-		print("Test avec réplication échoué")
-		print(f"Error : {e}")
-
-	# Test avec sharding
 	try:
-		mysql = MySQL(using_sharded_cluster=True)
-
-		mysql.logger.info("\n\nTest avec sharding et sans index \n\n")
-		test(mysql, "sharding")
-	
-		# Test avec une seule instance avec index
-		mysql.logger.info("\n\nTest avec sharding et avec index \n\n")
-		test_with_index(mysql,"sharding_with_index")
-	
-		# On fermes les connexions
-		mysql.close()
+		mysql_sharded = MySQL(using_sharded_cluster=True,debug_level=INFO)
+		print_progress.text = "Tests en mode Sharded..."
+		run_tests(mysql_sharded, "sharding")
+		del mysql_sharded
 	except Exception as e:
-		print(f"Error : {e}")
-		print("Test avec sharding échoué")
+		print(f"Erreur avec le test avec Shards: {e}")
+		errors += f"Erreur avec le test avec Shards: {e}\n"
+	finally:
+		if mysql_sharded is not None:
+			del mysql_sharded
+  
+	# On finit le thread de progressions
+	print_progress.run = False
+	operation_Event.set()
+	progress_T.join(timeout=1)
+	
+	print("End of tests")
+	print(errors)
+	
 

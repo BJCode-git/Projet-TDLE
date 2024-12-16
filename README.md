@@ -53,20 +53,5 @@ docker compose down
 docker compose down -v
 ```
 
-
-On pourra utiliser les scripts `deploy-mongodb.sh` et `deploy-mysql.sh` pour déployer les bases de données mongodb et MySQL nécessaires pour les tests de performance sans passer par Docker sous Linux.  
-IL est nécessaire d'avoir préalablement installé [mongodb]{https://docs.mongodb.com/manual/installation/} et [MySQL]{https://dev.mysql.com/doc/mysql-installation-excerpt/5.7/en/} pour utiliser ces scripts.  
-Pour réaliser l'intégralité des tests de performance, il suffit d'utiliser le script `run_tests.sh` qui permet de réaliser les tests de performance de mongodb et de MySQL sans passer par Docker sous Linux.  
-```bash
-chmod +x scripts/deploy-mongodb.sh scripts/deploy-mysql.sh scripts/run_tests.sh
-./scripts/run_tests.sh
-```
-
-Pour arrêter et nettoyer les bases de données mongodb et MySQL, il suffit d'utiliser les scripts `clean-mongodb.sh` et `clean-mysql.sh` qui permettent de supprimer les bases de données mongodb et MySQL sans passer par Docker sous Linux.
-```bash
-chmod +x scripts/clean-mongodb.sh scripts/clean-mysql.sh
-./scripts/clean-mongodb.sh
-./scripts/clean-mysql.sh
-```
-
+Note : Il est possible de configurer les paramètres des tests et le déploiement en modifiant les variables disponibles dans le fichier .env
 

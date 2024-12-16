@@ -1,2 +1,3 @@
 faker
 python-dotenv
+alive-progress

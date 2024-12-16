@@ -128,28 +128,28 @@ services:
         - 27018:27018
       extra_hosts:
         - "host.docker.internal:host-gateway"
-      healthcheck:
-        test: echo "try { 
-                        rs.status() 
-                    } 
-                    catch (err) { 
-                      rs.initiate(
-                                    {
-                                      _id:'rs0',
-                                      members:[
-                                                {_id:0,host:'mongo-replica1:27018',priority:1},
-                                                {_id:1,host:'mongo-replica2:27019',priority:0.5},
-                                                {_id:2,host:'mongo-replica3:27020',priority:0.5}
-                                              ]
-                                    }
-                                  ) 
-                      }" 
-              | mongosh --port 27018 --quiet
-        interval: 5s
-        timeout: 30s
-        start_period: 0s
-        start_interval: 1s
-        retries: 30
+      #healthcheck:
+      #  test: echo "try { 
+      #                  rs.status() 
+      #              } 
+      #              catch (err) { 
+      #                rs.initiate(
+      #                              {
+      #                                _id:'rs0',
+      #                                members:[
+      #                                          {_id:0,host:'mongo-replica1:27018',priority:1},
+      #                                          {_id:1,host:'mongo-replica2:27019',priority:0.5},
+      #                                          {_id:2,host:'mongo-replica3:27020',priority:0.5}
+      #                                        ]
+      #                              }
+      #                            ) 
+      #                }" 
+      #        | mongosh --port 27018 --quiet
+      #  interval: 5s
+      #  timeout: 30s
+      #  start_period: 0s
+      #  start_interval: 1s
+      #  retries: 30
       volumes:
         - "mongo-replica1_data:/data/db"
         - "mongo-replica1_config:/data/configdb"
@@ -164,8 +164,8 @@ services:
       command: mongod --replSet "rs0" --bind_ip_all --port 27019
       ports:
         - 27019:27019
-      #extra_hosts:
-#        - "host.docker.internal:host-gateway"
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
       volumes:
         - "mongo-replica2_data:/data/db"
         - "mongo-replica2_config:/data/configdb"
@@ -194,15 +194,17 @@ services:
       hostname: 'mongo-replica-initiate'
       entrypoint: >
         bash -c '
+          sleep 10 &&
           mongosh --host mongo-replica1:27018 --eval "
           rs.initiate({
             _id: \"rs0\",
             members:  [
                         {_id: 0, host: \"mongo-replica1:27018\", priority: 1},
-                        {_id: 1, host: \"mongo-replica2:27019\", priority: 0.5},
-                        {_id: 2, host: \"mongo-replica3:27020\", priority: 0.5}
+                        {_id: 1, host: \"mongo-replica2:27019\", priority: 0.1},
+                        {_id: 2, host: \"mongo-replica3:27020\", priority: 0.1}
                       ]
-          })"'
+          })"&&
+          exit 0'
       depends_on:
         - mongo-replica1
         - mongo-replica2
@@ -258,6 +260,8 @@ services:
     mongo-config-server-init:
       container_name: mongo-config-server-init
       hostname: mongo-config-server-init
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
       image: mongo:latest
       depends_on:
         - configserver1
@@ -277,7 +281,8 @@ services:
               { _id : 2, host : \"configserver3:27112\" }
             ]
           }
-        )"'
+        )" &&
+        exit 0'
       #extra_hosts:
 #        - "host.docker.internal:host-gateway"
       restart: on-failure
@@ -325,6 +330,8 @@ services:
     mongo-shard1-initiate:
       container_name: mongo-shard1-initiate
       hostname: mongo-shard1-initiate
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
       image: mongo:latest
       depends_on:
         shardsvr1_1:
@@ -393,6 +400,8 @@ services:
     mongo-shard2-initiate:
       container_name: mongo-shard2-initiate
       hostname: mongo-shard2-initiate
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
       image: mongo:latest
       depends_on:
         - shardsvr2_1
@@ -435,8 +444,8 @@ services:
         - 27115:27115
       volumes:
         - mongo-router:/data
-      #extra_hosts: 
-      #  - "host.docker.internal:host-gateway"
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
 
   ### End Router ###
 
@@ -459,8 +468,8 @@ services:
         mongosh mongo-router:27115 --eval "sh.status()"'
       depends_on:
         - mongo-router
-      #extra_hosts: 
-      #  - "host.docker.internal:host-gateway"
+      extra_hosts: 
+        - "host.docker.internal:host-gateway"
       restart: on-failure
 
 ### End Mongo Shards ###
@@ -475,7 +484,6 @@ services:
       command: >
         bash -c '
         pip install -r requirements.txt &&
-
         python3 generate_data.py'
       volumes:
         - ./.env:/.env
@@ -483,9 +491,27 @@ services:
         - ./requirements/generate_data-requirements.txt:/requirements.txt
         - generated-data:/generated-data
 
+    start_mongo:
+      image: alpine:latest
+      container_name: start_mongo
+      extra_hosts: 
+        - "host.docker.internal:host-gateway"
+      command: echo "MongoDB is started !"
+      depends_on:
+        mongo-standalone :
+          condition: service_started
+        mongo-replica-initiate :
+          condition: service_completed_successfully
+        mongo-sharded-cluster :
+          condition: service_completed_successfully
+        
+
+
     test-mongo:
       image: python:latest
       container_name: test-mongo
+      extra_hosts: 
+        - "host.docker.internal:host-gateway"
       depends_on:
         generate-data:
           condition: service_completed_successfully
@@ -498,7 +524,9 @@ services:
       command: >
         bash -c '
         pip install -r requirements.txt &&
-        python3 mongodb.py'
+        python3 mongodb.py
+        killall mongod
+        '
       volumes:
         - ./.env:/.env
         - ./generate_data.py:/generate_data.py
@@ -522,10 +550,12 @@ services:
       command: >
         bash -c '
         pip install -r requirements.txt &&
-        python3 mysql.py'
+        python3 mysql.py
+        killall mysqld'
       volumes:
         - ./mysql.py:/mysql.py
         - ./logs:/logs
+        - .plots/:/plots
         - ./requirements/mysql-requirements.txt:/requirements.txt
         - generated-data:/generated-data
 

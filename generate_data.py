@@ -6,6 +6,7 @@ from datetime import datetime
 from os import getenv
 from dotenv import load_dotenv
 from dataclasses import dataclass
+from alive_progress import alive_bar
 
 """
 Collection/Table "Books" :
@@ -30,26 +31,24 @@ random_seed(1234)
 # Configuration
 num_records				= 10000
 num_records_per_many	= 10
-generated_file			= "books.json"
-updated_file			= "updated_books.json"
+generated_file			= "generated-data/books.json"
+updated_file			= "generated-data/updated_books.json"
 
 
 # Genres de livres disponibles
 genres = ["Fiction", "Non-Fiction", "Science", "Fantasy", "Biography", "Romance", "Thriller"]
 @dataclass
 class Book:
-	id: str 					= 0
+	id: int 					= 0
 	title: str 					= ""
 	author: str 				= ""
 	published_date: datetime	= datetime.now()
 	genre: str					= genres[0]
-	price: float				= 0.0
+	price: float				= 1.0
 	copies_sold: int			= 0
 	ran: int					= 0
 	
  
- 
-
 def get_configuration():
 	"""
 	Get the configuration of the database
@@ -72,14 +71,15 @@ def get_configuration():
 	get_configuration.loaded = True
 get_configuration.loaded = False
 
-# Récupérer la configuration
-get_configuration()
 
-def generate_book():
+def generate_book(id=-1) -> dict:
 	global faker, genres,num_records_per_many
-	generate_book.id += 1
+	if id == -1:
+		generate_book.id += 1
+		id = generate_book.id
+	
 	return {
-		"id":				generate_book.id,
+		"id":				id,
 		"title":			faker.sentence(nb_words=randint(1, 6)),
 		"author":			faker.name(),
 		"published_date":	faker.date_between(start_date="-250y", end_date="today").strftime("%Y-%m-%d"),
@@ -91,9 +91,18 @@ def generate_book():
 generate_book.id = -1
  
 def generate_dataset(num_records):
-	return [generate_book() for _ in range(num_records)]
+ 
+	books = []
+	# Générer les données
+	with alive_bar(num_records) as bar: 
+		bar.text("Generating data...")
+		for i in range(num_records):
+			books.append(generate_book(i))
+			bar()
+	
+	return books
 
-def extract_books_from_file(file):
+def extract_books_from_file(file, max_data:int = num_records) -> list[Book]:
 	"""
 		Extract the books from file to a list of Books
 		__param file: str
@@ -102,6 +111,8 @@ def extract_books_from_file(file):
 	with open(file, "r") as f:
 		data = json.load(f)
 		books = []
+  
+		i = 0
 		for item in data:
 			books.append(Book(	id=item["id"], 
 								title=item["title"], 
@@ -113,13 +124,18 @@ def extract_books_from_file(file):
 								ran=item["ran"]
 							)
 						)
+			i+=1
+			if i >= max_data:
+				break
 
 	return books	
 
-def extract_updated_books_from_file(file):
+def extract_updated_books_from_file(file, max_data:int = num_records):
 	with open(file, "r") as f:
 		data = json.load(f)
 		books = []
+  
+		i = 0
 		for item in data:
 			original = item["original"]
 			modified = item["modified"]
@@ -141,9 +157,13 @@ def extract_updated_books_from_file(file):
 									ran=modified["ran"])
 			books.append((original_book, modified_book))
 
+			i+=1
+			if i >= max_data:
+				break
+
 	return books
 
-def modify_book(book):
+def modify_book(book) -> dict:
 	global  genres
 	update_faker = Faker("fr_FR")
 	update_faker.seed_instance(9876)
@@ -159,39 +179,28 @@ def modify_book(book):
 			while new_book["title"] == book["title"] or tries < max_tries:
 				tries += 1
 				new_book["title"] = update_faker.sentence(nb_words=randint(1, 6))
-			print(f"Title : {new_book['title']}")
-   
 		case 2:
 			while new_book["author"] == book["author"] or tries < max_tries:
 				tries += 1
 				new_book["author"] = update_faker.name()
-			print(f"Author : {new_book['author']}")
-
 		case 3:
 			while new_book["published_date"] == book["published_date"] or tries < max_tries:
 				tries += 1
 				new_book["published_date"] = update_faker.date_between(start_date="-250y", end_date="today").strftime("%Y-%m-%d")
-			print(f"Published Date : {new_book['published_date']}")
-
 		case 4:
 			while new_book["genre"] == book["genre"] or tries < max_tries:
 				tries += 1
 				new_book["genre"] = choice(genres)
-			print(f"Genre : {new_book['genre']}")
-
 		case 5:
 			while new_book["price"] == book["price"] or tries < max_tries:
 				tries += 1
 				new_book["price"] = random() * 50 + 5
-			print(f"Price : {new_book['price']}")
-
 		case 6:
 			while new_book["copies_sold"] == book["copies_sold"] or tries < max_tries:
 				tries += 1
 				new_book["copies_sold"] = randint(0, 1000000)
-			print(f"Copies Sold : {new_book['copies_sold']}")
-
 		case _:
+			# Par défaut, on modifie le prix
 			new_book["price"] = new_book["price"] + 1
 
 	return new_book
@@ -201,29 +210,36 @@ def update_dataset(dataset):
 		update dataset in place
 		__param dataset: list of dictionaries
 	"""
-	for i in range(0,len(dataset)):
-		original	= dataset[i]
-		modified	= modify_book(original)
-		#print(f"change : {original} to {modified}")
-		dataset[i]	= {"original": original, "modified": modified}
+
+	with alive_bar(num_records) as bar:
+		bar.text("Generating updates values..")
+		for i in range(0,len(dataset)):
+			original	= dataset[i]
+			modified	= modify_book(original)
+			dataset[i]	= {"original": original, "modified": modified}
+			bar()
 
 
 def save_to_file(data, filename):
 	with open(filename, "w",encoding='utf8') as f:
 		json.dump(data, f,indent=4, ensure_ascii=False)
 
+
 if __name__ == "__main__":
-	
+	# Récupérer la configuration
+	get_configuration()
+
 	# Générer les données
-	dataset = generate_dataset(num_records)
+	dataset=generate_dataset(num_records)
+ 
 	# Enregistrer les données dans un fichier
 	save_to_file(dataset, generated_file)
-	
-	
+
 	# Génération des données à modifier
 	# On génère de nouvelles graines pour les données modifiées
 	random_seed(9876)
 	update_dataset(dataset)
+ 
 	# Enregistrer les données dans un fichier
 	save_to_file(dataset, updated_file)
 	
