@@ -8,8 +8,8 @@ from pymongo	import monitoring
 #from time		import perf_counter_ns
 
 # For generating data and handling data
-from data_generation import extract_books_from_file, extract_updated_books_from_file, Book
-from data_generation import num_records, num_records_per_many, generated_file, updated_file
+from  generate_data import extract_books_from_file, extract_updated_books_from_file, Book
+from  generate_data import num_records, num_records_per_many, generated_file, updated_file
 
 # for graphing
 import matplotlib.pyplot as plt
@@ -20,7 +20,7 @@ from psutil import cpu_count, virtual_memory
 from cpuinfo import get_cpu_info
 
 # For logging
-from logging import getLogger, basicConfig, INFO, DEBUG, ERROR
+from logging import getLogger, basicConfig, INFO, DEBUG, ERROR, FileHandler
 from sys import stderr
 
 
@@ -39,14 +39,13 @@ Collection/Table "Books" :
 	published_date : Date de publication (Date)
 	genre : Genre du livre (String)
 	copies_sold : Nombre d'exemplaires vendus (Integer)
+	price : Prix du livre (Float)
+	ran: Champ aléatoire pour les tests entre 0 et num_records_per_many-1 (Integer)
 """
 
 class CommandLogger(monitoring.CommandListener):
 	def started(self, event):
-		global operation_times
-		# on va initier un tableau de liste de temps selon l'opération
-		operation_times = {}
-		# On utilisera CommandSucceededEvent pour récupérer le temps de l'opération
+		pass
 
 	def succeeded(self, event):
 		global operation_times
@@ -54,9 +53,9 @@ class CommandLogger(monitoring.CommandListener):
 		operation_time = event.duration_micros
 		# On récupère le nom de l'opération
 		operation_name = event.command_name
-  
+		print(f"Operation : {operation_name} - Time : {operation_time} µs")
 		# On ajoute le temps de l'opération dans le tableau
-		if operation_name not in self.operation_times:
+		if operation_name not in operation_times:
 			operation_times[operation_name] = [operation_time]
 		else:
 			operation_times[operation_name].append(operation_time)
@@ -67,6 +66,7 @@ class CommandLogger(monitoring.CommandListener):
 		operation_name = event.command_name
 		query = event.command
 		message = event.failure
+		print(f"Operation failed : {operation_name} - Query : {query} - Message : {message}")
 		if operation_name not in failed_operations:
 			failed_operations[operation_name] = [(query,message)]
 		else:
@@ -75,8 +75,14 @@ class CommandLogger(monitoring.CommandListener):
 class MongoDB:
 	def __init__(self,using_replica_set: bool=False,using_sharded_cluster:bool = False):
 		# Logging
-		self.logger = getLogger(__name__)
-		basicConfig(level=INFO)
+		self.logger = getLogger("MongoDB")
+		self.logger.setLevel(DEBUG)
+		try:
+			file_handler = FileHandler('logs/mongodb.log')
+			self.logger.addHandler(file_handler)
+		
+		except Exception as e:
+			self.logger.error(f"MongoDB.__init__: {e}")
 		
 		# Loading Environment variables to connect to MongoDB
 		try:
@@ -92,10 +98,10 @@ class MongoDB:
 				mongo_host	= getenv('MONGO_HOST',			'localhost')
 				mongo_port	= getenv('MONGO_PORT',			'27017')
 
-			mongo_user	= getenv('MONGO_USER',		'root')
-			mongo_pass	= getenv('MONGO_PASS',		'root')
-			database	= getenv('MONGO_DATABASE',	'database-test')
-			collection	= getenv('MONGO_COLLECTION','collection-test')
+			mongo_user	= getenv('MONGO_USER',		'')
+			mongo_pass	= getenv('MONGO_PASS',		'')
+			database	= getenv('MONGO_DATABASE',	'test')
+			collection	= getenv('MONGO_COLLECTION','test')
 
 		except Exception as e:
 			self.logger.error(f"MongoDB.__init__: {e}")
@@ -107,30 +113,38 @@ class MongoDB:
 				self.client	= MongoClient(	mongo_host,
 											int(mongo_port),
 											replicaSet=replica_set,
-											username=mongo_user,
-											password=mongo_pass,
-											event_listeners=[CommandLogger()]
+											connect=True
+											#username=mongo_user,
+											#password=mongo_pass
 										)
+			elif using_sharded_cluster:
+				self.client	= MongoClient(	mongo_host,
+											int(mongo_port),
+											connect=True)
 			else:
 				self.client	= MongoClient(	mongo_host,
 											int(mongo_port),
-											username=mongo_user,
-											password=mongo_pass,
-											event_listeners=[CommandLogger()]
+											connect=True
+											#username=mongo_user,
+											#password=mongo_pass
 										)
 
 			self.db			= self.client[database]
 			self.collection = self.db[collection]
+			self.client.server_info()
+			self.client.start_session()
+			self.logger.info("Connected to MongoDB")
 
 		except Exception as e:
 			self.logger.error(f"MongoDB.__init__: {e}")
 			raise Exception("MongoDB : Error connecting to database")
 
 		# Monitoring
-		self.client.set_command_listener(CommandLogger())
+		monitoring.register(CommandLogger())
 
 	def __del__(self):
-		self.client.close()
+		if self.client is not None:
+			self.client.close()
 	
 	def create_index(self,field ,unique : bool=False):
 		"""
@@ -152,27 +166,33 @@ class MongoDB:
 		else:
 			self.logger.error(f"Error creating indexes : {fields}")
 
-	def read(self):
+	def read(self,print_result: bool = True)-> list:
 		"""
 		Find all documents in the collection
 		"""
+		l = []
 		for x in self.collection.find():
-			self.logger.info(x)
+			if print_result:
+				self.logger.info(x)
+			l.append(x)
+		return l
 
-	def read_one(self,query):
+	def read_one(self,query,print_result:bool = True):
 		"""
 		Find the first document that matches the query
 		:param query: the query to find the document
 		"""
 		x = self.collection.find_one(query)
-		self.logger.info(x)
+		if print_result:
+			self.logger.info(x)
+		return x
 
 	def create_one(self,data):
 		"""
 		Insert one document in the collection
 		:param data: the document to insert
 		"""
-		if self.collection.insert_one(data) is not None:
+		if self.collection.insert_one(data) :
 			self.logger.debug(f"Data inserted : {data}")
 		else:
 			self.logger.error(f"Error inserting data : {data}")
@@ -183,8 +203,11 @@ class MongoDB:
 		:param query: the query to find the document to update
 		:param new_values: the new values to update
 		"""
-		if self.collection.update_one(query, new_values).modified_count > 0:
+		update_result = self.collection.update_one(query, new_values)
+		if update_result.modified_count > 0:
 			self.logger.debug(f"Data updated : {query} -> {new_values}")
+		elif update_result.matched_count > 0:
+			self.logger.error(f"No data updated but {update_result.matched_count} matched with \n: \t \t{query} -> {new_values}")
 		else:
 			self.logger.error(f"No data updated with : {query} -> {new_values}")
 
@@ -204,7 +227,7 @@ class MongoDB:
 		Insert several documents in the collection
 		:param data: the documents to insert
 		"""
-		if self.collection.insert_many(data) is not None:
+		if self.collection.insert_many(data):
 			self.logger.debug(f"Data inserted : {data}")
 		else:
 			self.logger.error(f"Error inserting data : {data}")
@@ -215,8 +238,11 @@ class MongoDB:
 		:param query: the query to find the documents to update
 		:param new_values: the new values to update
 		"""
-		if self.collection.update_many(query, new_values).modified_count > 0:
-			self.logger.debug(f"Data updated : {query} -> {new_values}")
+		update_result = self.collection.update_many(query, new_values)
+		if update_result.modified_count > 0:
+			self.logger.debug(f" { update_result.modified_count} Data updated : {query} -> {new_values}")
+		elif update_result.matched_count > 0:
+			self.logger.error(f"No data updated but {update_result.matched_count} matched with \n: \t \t{query} -> {new_values}")
 		else:
 			self.logger.error(f"No data updated with : {query} -> {new_values}")
 
@@ -276,34 +302,31 @@ def plot_operation_times(test_name=""):
 	global operation_times
 	# On va créer un graphique pour chaque opération
 	for operation in operation_times:
-		plt.plot(operation_times[operation], label=operation)
+		plt.plot(operation_times[operation], label=operation,scalex=True,scaley=True)
 		plt.title('Time of operations')
 		plt.xlabel(test_name+ operation )
 		plt.ylabel('Time (µs)')
-		plt.annotate(system_info, (0,0), (0, -40), xycoords='axes fraction', textcoords='offset points', va='top')
+		#plt.annotate(system_info, (0,0), (0, -40), xycoords='axes fraction', textcoords='offset points', va='top')
 		plt.legend()
-		plt.savefig(f"MongoDB_{test_name}_{operation}.png")
-		plt.show()
+		plt.savefig(f"plots/MongoDB_{test_name}_{operation}.png")
+		#plt.show()
 
 
 ###### Tests de performance ######
-	###### Tests avec une seule instance ######
+	###### tries < max_triess avec une seule instance ######
 
-def test_without_index(mongo: MongoDB,plot_name :str):
+def test(mongo: MongoDB,plot_name :str):
 	global num_records_per_many, generated_file, updated_file
  
 	# On récupère les données
 	dataset = extract_books_from_file(generated_file)
 
 	### Tests avec données une par une  ###
-
+ 
 	## Test d'insertion de données
+	mongo.logger.debug("Test insert one by one : ")
 	for book in dataset:
-		mongo.create_one(book)
-
-	## Test de lecture de données sur la collection "Books", en choississant l'id
-	for i in range(0,len(dataset)):
-		mongo.read_one({"id":i})
+		mongo.create_one(book.__dict__)
 
 	## Test de mise à jour de données
  
@@ -312,34 +335,68 @@ def test_without_index(mongo: MongoDB,plot_name :str):
 	# note : update_dataset contains the original and modified data
 	
 	for update in updated_dataset:
-		mongo.update_one(update["original"],update["modified"])
+		original = update[0].__dict__
+		modified = update[1].__dict__
+	
+		if original == modified:
+			mongo.logger.error(f"Data are the same : \n\t{original} -> \n\t{modified}")
+		else:
+			#Sinon on identifie le champ modifié
+			new_values = {}
+			key = ""
+			for key in original:
+				if original[key] != modified[key]:
+					new_values = {key: modified[key]}
+					break
+			mongo.update_one(update[0].__dict__,{ "$set": new_values})
+			
+  
+	## Test de lecture de données
+	## Test de lecture de données sur la collection "Books", en choississant l'id
+	mongo.logger.debug("Test read one by one : ")
+	for i in range(0,len(dataset)):
+		mongo.read_one({"id":i},print_result=False)
+
 	
 	## Test de suppression de données
+	mongo.logger.debug("Test delete one by one : ")
 	for _,book in updated_dataset:
-		mongo.delete_one(book)
+		mongo.delete_one(book.__dict__)
 	
-	# On supprime toutes les données de la collection
-	mongo.drop_all()
-	
+	# On a normalement supprimé toutes les données !
+
+
 	### Tests avec plusieurs données à la fois  ###
 	# On envoie à chaque fois num_records_per_many données
- 
+	
 	## Test d'insertion de données
+	mongo.logger.debug("Test insert many : ")
 	for i in range(0,len(dataset),num_records_per_many):
-		mongo.create_many(dataset[i:i+num_records_per_many])
-
-	## Test de lecture de données
-	mongo.read()
+		data = [book.__dict__ for book in dataset[i:i+num_records_per_many]]
+		mongo.create_many(data)
  
 	## Test de mise à jour de données
+	mongo.logger.debug("Test update many : ")
 	for i in range(0,len(updated_dataset),num_records_per_many):
 		# On met à jour les données
-		mongo.update_many(updated_dataset[i:i+num_records_per_many])
+		# Avec le champ "ran" qui est entre O  
+		mongo.update_many({"ran" : i %num_records_per_many},{ "$inc": {"price" : 5.00, "copies_sold": 100} } )
+
+	dataset.clear()
+ 
+	## Test de lecture de données
+	mongo.logger.debug("Test read all : ")
+	dataset = mongo.read(print_result=False)
 
 	## Test de suppression de données
-	for i in range(0,len(updated_dataset),num_records_per_many):
+	mongo.logger.debug("Test delete many : ")
+	for i in range(0,num_records_per_many):
 		# On supprime les données
-		mongo.delete_many(updated_dataset[i:i+num_records_per_many])
+		mongo.delete_many({"ran" : i})
+
+	mongo.logger.debug("Data read : ")
+	for data in dataset:
+		mongo.logger.debug(data)
 
 
 	# Dessiner les graphiques
@@ -349,7 +406,7 @@ def test_without_index(mongo: MongoDB,plot_name :str):
 	print_failed_operations()
  
 	# On supprime toutes les données de la collection
-	mongo.drop_all()
+	#mongo.drop_all()
  
 	# On réinitialise les données des opérations
 	mongo.clear_operation_data()
@@ -362,57 +419,64 @@ def test_with_index(mongo: MongoDB,plot_name :str):
 				IndexModel("author"), 
 				IndexModel("published_date"), 
 				IndexModel("genre"), 
-				IndexModel("copies_sold")]
+				IndexModel("copies_sold"),
+				IndexModel("ran")]
+	mongo.logger.debug("Creating indexes...")
 	mongo.create_indexes(indexes)
 	
 	# on va faire les mêmes tests que précédemment
-	test_without_index(mongo,plot_name)
-
-
-	##### Test avec réplication ######
-
-
+	test(mongo,plot_name)
 
 if __name__ == "__main__":
 
 	get_system_info()
 	
-	try:
-		# Test avec une seule instance sans index
-		mongo = MongoDB()
-		test_without_index(mongo, "single_instance")
-		
-		# Test avec une seule instance avec index
-		test_with_index(mongo,	"single_instance_with_index")
+	#try:
+	# Test avec une seule instance sans index
+	mongo = MongoDB()
+	mongo.logger.info(system_info)
+	mongo.logger.info("\n\nTest avec une seule instance sans index\n\n")
+	test(mongo, "single_instance")
 	
-		# On fermes les connexions
-		mongo.close()
-	except Exception as e:
-		print(f"Error : {e}")
-		print("Test avec instance unique échoué")
+	# Test avec une seule instance avec index
+	mongo.logger.info("\n\nTest avec une seule instance avec index\n\n")
+	test_with_index(mongo,"single_instance_with_index")
+
+	# On fermes les connexions
+	mongo.close()
+	#except Exception as e:
+	#	print("Test avec instance unique échoué")
+	# 	print(f"Error : {e}")
 
 	try:
 		mongo = MongoDB(using_replica_set=True)
+  
 		# Test avec réplication et sans index
-		test_without_index(mongo, "replication")
+		mongo.logger.info("\n\nTest avec réplication et sans index \n\n")
+		test(mongo, "replication")
 	
 		# Test avec réplication et avec index
+		mongo.logger.info("\n\nTest avec réplication et avec index \n\n")
 		test_with_index(mongo, "replication_with_index")
 		
 		mongo.close()
 	except Exception as e:
-		print(f"Error : {e}")
 		print("Test avec réplication échoué")
+		print(f"Error : {e}")
 
 	# Test avec sharding
 	try:
-		mongo = MongoDB()
+		mongo = MongoDB(using_sharded_cluster=True)
+
+		mongo.logger.info("\n\nTest avec sharding et sans index \n\n")
+		test(mongo, "sharding")
 	
 		# Test avec une seule instance avec index
-		test_with_index(mongo,	"single_instance_with_index")
+		mongo.logger.info("\n\nTest avec sharding et avec index \n\n")
+		test_with_index(mongo,"sharding_with_index")
 	
 		# On fermes les connexions
 		mongo.close()
 	except Exception as e:
 		print(f"Error : {e}")
-		print("Test avec instance unique échoué")
+		print("Test avec sharding échoué")

@@ -1,3 +1,5 @@
-mysql-connector-python
+faker
+PyMySQL
 python-dotenv
 py-cpuinfo
+matplotlib

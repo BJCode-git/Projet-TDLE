@@ -1,3 +1,6 @@
 pymongo
+faker
 python-dotenv
 py-cpuinfo
+psutil
+matplotlib

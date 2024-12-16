@@ -13,17 +13,99 @@ services:
       env_file:
         - .env
 
+
   ### End Standalone ###
 
   ### MySQL Replication ###
 
+    mysql-master:
+      container_name: 'mysql-master'
+      image: 'mysql:latest'
+      command: --default-authentication-plugin=mysql_native_password
+      ports:
+        - 3307:3306
+      volumes:
+        - mysql-master-data:/var/lib/mysql
+      env_file:
+        - .env
 
+    mysql-slave1:
+      container_name: 'mysql-slave1'
+      image: 'mysql:latest'
+      command: --default-authentication-plugin=mysql_native_password
+      ports:
+        - 3308:3306
+      volumes:
+        - mysql-slave1-data:/var/lib/mysql
+      env_file:
+        - .env
+    
+    ### End Replication ###
+
+    ### Initiate Replication ###
+    mysql-replica-initiate:
+      image: mysql:latest
+      container_name: 'mysql-replica-initiate'
+      entrypoint: >
+        bash -c '
+          mysql -u root -p${MYSQL_ROOT_PASSWORD} -e "CHANGE MASTER TO MASTER_HOST=\"mysql-master\", MASTER_USER=\"repl\", MASTER_PASSWORD=\"repl\", MASTER_AUTO_POSITION=1; START SLAVE;"'
+      depends_on:
+        - mysql-master
+        - mysql-slave1
+      restart: on-failure
+  
+    ### End Initiate Replication ###
+
+  ### End Replication ###
+
+  ### MySQL Cluster ###
+
+    mysql-manager: 
+      container_name: 'mysql-cluster'
+      image: 'mysql/mysql-cluster:latest'
+      command : --name=management1  --ip=127.0.0.1 --port=1186
+      ports:
+        - 1186:1186
+      volumes:
+        - mysql-cluster-data:/var/lib/mysql
+      env_file:
+        - .env
+
+    mysql-node1:
+      container_name: 'mysql-node1'
+      image: 'mysql/mysql-cluster:latest'
+      command : --name=ndb1  --ip=127.0.0.2 --port=3306
+      ports:
+        - 3306:3306
+      volumes:
+        - mysql-cluster-data:/var/lib/mysql
+      env_file:
+        - .env
+
+    mysql-node2:
+      container_name: 'mysql-node2'
+      image: 'mysql/mysql-cluster:latest'
+      command : --name=ndb2  --ip=127.0.0.2 --port=3306
+
+    mysql-sharded-initiate:
+      image: mysql:latest
+      container_name: 'mysql-sharded-initiate'
+      entrypoint: >
+        bash -c '
+          mysql -u root -p${MYSQL_ROOT_PASSWORD} -e "CREATE DATABASE test; USE test; CREATE TABLE test (id INT PRIMARY KEY, name VARCHAR(255));"'
+      depends_on:
+        - mysql-manager
+        - mysql-node1
+        - mysql-node2
+      restart: on-failure
+  
   ### Mongo Standalone ###
 
     mongo-standalone:
       container_name: 'mongo-standalone'
+      hostname: 'mongo-standalone'
       image: 'mongo:latest'
-      command: ["--bind_ip_all", "--port", "27017"]
+      command: mongod --bind_ip_all --port 27017
       ports:
         - 27017:27017
       volumes:
@@ -39,18 +121,11 @@ services:
   ### Mongo Replica1  ###
     mongo-replica1:
       container_name: 'mongo-replica1'
+      hostname: 'mongo-replica1'
       image: mongo:latest
-      command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27018"]
+      command: mongod --replSet "rs0" --bind_ip_all --port 27018
       ports:
         - 27018:27018
-      #  env_file:
-      #    - .env
-      #  environment:
-      #    - MONGO_INITDB_ROOT_USERNAME=${MONGO_USER}
-      #    - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASS}
-      #    - MONGO_INITDB_DATABASE=${MONGO_DATABASE}
-      #    - MONGO_INITDB_REPLICA_SET=${MONGO_REPLICA_SET}
-      #    #- MONGO_INITDB_COLLECTION=${MONGO_COLLECTION}
       extra_hosts:
         - "host.docker.internal:host-gateway"
       healthcheck:
@@ -62,9 +137,9 @@ services:
                                     {
                                       _id:'rs0',
                                       members:[
-                                                {_id:0,host:'host.docker.internal:27018',priority:1},
-                                                {_id:1,host:'host.docker.internal:27019',priority:0.5},
-                                                {_id:2,host:'host.docker.internal:27020',priority:0.5}
+                                                {_id:0,host:'mongo-replica1:27018',priority:1},
+                                                {_id:1,host:'mongo-replica2:27019',priority:0.5},
+                                                {_id:2,host:'mongo-replica3:27020',priority:0.5}
                                               ]
                                     }
                                   ) 
@@ -85,11 +160,12 @@ services:
     mongo-replica2:
       image: mongo:latest
       container_name: 'mongo-replica2'
-      command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27019"]
+      hostname: 'mongo-replica2'
+      command: mongod --replSet "rs0" --bind_ip_all --port 27019
       ports:
         - 27019:27019
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
+      #extra_hosts:
+#        - "host.docker.internal:host-gateway"
       volumes:
         - "mongo-replica2_data:/data/db"
         - "mongo-replica2_config:/data/configdb"
@@ -100,7 +176,8 @@ services:
     mongo-replica3:
       image: mongo:latest
       container_name: 'mongo-replica3'
-      command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27020"]
+      hostname: 'mongo-replica3'
+      command: mongod --replSet "rs0" --bind_ip_all --port 27020
       ports:
         - 27020:27020
       extra_hosts:
@@ -114,6 +191,7 @@ services:
     mongo-replica-initiate:
       image: mongo:latest
       container_name: 'mongo-replica-initiate'
+      hostname: 'mongo-replica-initiate'
       entrypoint: >
         bash -c '
           mongosh --host mongo-replica1:27018 --eval "
@@ -129,7 +207,7 @@ services:
         - mongo-replica1
         - mongo-replica2
         - mongo-replica3
-      extra_hosts: 
+      extra_hosts:
         - "host.docker.internal:host-gateway"
       restart: on-failure
       
@@ -143,39 +221,43 @@ services:
   
     configserver1:
       container_name: configserver1
+      hostname: configserver1
       image: mongo:latest
       command: mongod --configsvr --replSet configserver  --dbpath /data/db --port 27110 --bind_ip_all
       ports:
         - 27110:27110
       volumes:
         - configserver1:/data/db
-      extra_hosts: 
+      extra_hosts:
         - "host.docker.internal:host-gateway"
 
     configserver2:
       container_name: configserver2
+      hostname: configserver2
       image: mongo:latest
       command: mongod --configsvr --replSet configserver --dbpath /data/db --port 27111 --bind_ip_all
       ports:
         - 27111:27111
       volumes:
         - configserver2:/data/db
-      extra_hosts: 
+      extra_hosts:
         - "host.docker.internal:host-gateway"
 
     configserver3:
       container_name: configserver3
+      hostname: configserver3
       image: mongo:latest
       command: mongod --configsvr --replSet configserver --dbpath /data/db --port 27112 --bind_ip_all
       ports:
         - 27112:27112
       volumes:
         - configserver3:/data/db
-      extra_hosts: 
+      extra_hosts:
         - "host.docker.internal:host-gateway"
 
     mongo-config-server-init:
       container_name: mongo-config-server-init
+      hostname: mongo-config-server-init
       image: mongo:latest
       depends_on:
         - configserver1
@@ -196,8 +278,8 @@ services:
             ]
           }
         )"'
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
+      #extra_hosts:
+#        - "host.docker.internal:host-gateway"
       restart: on-failure
 
   ### End Config Server ###
@@ -206,44 +288,51 @@ services:
 
     shardsvr1_1:
       container_name: shardsvr1_1
+      hostname: shardsvr1_1
       image: mongo:latest
       command: mongod --shardsvr --replSet shard1_rs --dbpath /data/db --port 27117 --bind_ip_all
       ports:
         - 27117:27117
       volumes:
         - shardsvr1_1:/data/db
-      extra_hosts: 
+      extra_hosts:
         - "host.docker.internal:host-gateway"
 
     shardsvr1_2:
       container_name: shardsvr1_2
+      hostname: shardsvr1_2
       image: mongo:latest
       command: mongod --shardsvr --replSet shard1_rs --dbpath /data/db --port 27118 --bind_ip_all
       ports:
         - 27118:27118
       volumes:
         - shardsvr1_2:/data/db
-      extra_hosts: 
+      extra_hosts:
         - "host.docker.internal:host-gateway"
 
     shardsvr1_3:
       container_name: shardsvr1_3
+      hostname: shardsvr1_3
       image: mongo:latest
       command: mongod --shardsvr --replSet shard1_rs --dbpath /data/db --port 27119 --bind_ip_all
       ports:
         - 27119:27119
       volumes:
         - shardsvr1_3:/data/db
-      extra_hosts: 
+      extra_hosts:
         - "host.docker.internal:host-gateway"
 
     mongo-shard1-initiate:
       container_name: mongo-shard1-initiate
+      hostname: mongo-shard1-initiate
       image: mongo:latest
       depends_on:
-        - shardsvr1_1
-        - shardsvr1_2
-        - shardsvr1_3
+        shardsvr1_1:
+          condition : service_started
+        shardsvr1_2:
+          condition : service_started
+        shardsvr1_3:
+          condition : service_started
       command: >
         bash -c '
         echo "on initialise le shard 1 " &&
@@ -257,8 +346,8 @@ services:
             ]
           }
         )"'
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
+      #extra_hosts:
+#        - "host.docker.internal:host-gateway"
       restart: on-failure
 
   ### End Shard 2 ###
@@ -267,39 +356,43 @@ services:
 
     shardsvr2_1:
       container_name: shardsvr2_1
+      hostname: shardsvr2_1
       image: mongo:latest
       command: mongod --shardsvr --replSet shard2_rs --dbpath /data/db --port 27217 --bind_ip_all
       ports:
         - 27217:27217
       volumes:
         - shardsvr2_1:/data/db
-      extra_hosts: 
+      extra_hosts:
         - "host.docker.internal:host-gateway"
 
     shardsvr2_2:
       container_name: shardsvr2_2
+      hostname: shardsvr2_2
       image: mongo:latest
       command: mongod --shardsvr --replSet shard2_rs --dbpath /data/db --port 27218 --bind_ip_all
       ports:
         - 27218:27218
       volumes:
         - shardsvr2_2:/data/db
-      extra_hosts: 
+      extra_hosts:
         - "host.docker.internal:host-gateway"
         
     shardsvr2_3:
       container_name: shardsvr2_3
+      hostname: shardsvr2_3
       image: mongo:latest
       command: mongod --shardsvr --replSet shard2_rs --dbpath /data/db --port 27219 --bind_ip_all
       ports:
         - 27219:27219
       volumes:
         - shardsvr2_3:/data/db
-      extra_hosts: 
+      extra_hosts:
         - "host.docker.internal:host-gateway"
 
     mongo-shard2-initiate:
       container_name: mongo-shard2-initiate
+      hostname: mongo-shard2-initiate
       image: mongo:latest
       depends_on:
         - shardsvr2_1
@@ -318,8 +411,8 @@ services:
             ]
           }
         )"'
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
+      #extra_hosts:
+#        - "host.docker.internal:host-gateway"
       restart: on-failure
         
   ### End Shard 2 ###
@@ -328,6 +421,7 @@ services:
 
     mongo-router:
       container_name: mongo-router
+      hostname: mongo-router
       image: mongo:latest
       command: mongos --configdb configserver/configserver1:27110,configserver2:27111,configserver3:27112 --bind_ip_all --port 27115
       depends_on:
@@ -341,12 +435,12 @@ services:
         - 27115:27115
       volumes:
         - mongo-router:/data
-      extra_hosts: 
-        - "host.docker.internal:host-gateway"
+      #extra_hosts: 
+      #  - "host.docker.internal:host-gateway"
 
   ### End Router ###
 
-    mongo-sharded-initiate:
+    mongo-sharded-cluster:
       container_name: mongo-sharded-cluster
       image: mongo:latest
       # La base de données est test.
@@ -365,8 +459,8 @@ services:
         mongosh mongo-router:27115 --eval "sh.status()"'
       depends_on:
         - mongo-router
-      extra_hosts: 
-        - "host.docker.internal:host-gateway"
+      #extra_hosts: 
+      #  - "host.docker.internal:host-gateway"
       restart: on-failure
 
 ### End Mongo Shards ###
@@ -374,47 +468,56 @@ services:
 ### Python tests ###
 
     generate-data:
-      image: python3:latest
+      image: python:latest
       container_name: generate-data
+      env_file:
+        - .env
       command: >
         bash -c '
         pip install -r requirements.txt &&
+
         python3 generate_data.py'
       volumes:
+        - ./.env:/.env
         - ./generate_data.py:/generate_data.py
-        - ./requirements/data_generation-requirements.txt:/requirements.txt
+        - ./requirements/generate_data-requirements.txt:/requirements.txt
         - generated-data:/generated-data
 
     test-mongo:
-      image: python3:latest
+      image: python:latest
       container_name: test-mongo
       depends_on:
-        generate_data:
+        generate-data:
           condition: service_completed_successfully
         mongo-standalone :
-          condition: service_healthy
+          condition: service_started
         mongo-replica-initiate :
           condition: service_completed_successfully
-        mongo-sharded-initiate :
+        mongo-sharded-cluster :
           condition: service_completed_successfully
       command: >
         bash -c '
         pip install -r requirements.txt &&
         python3 mongodb.py'
       volumes:
+        - ./.env:/.env
+        - ./generate_data.py:/generate_data.py
         - ./mongodb.py:/mongodb.py
         - ./requirements/mongo-requirements.txt:/requirements.txt
+        - ./plots/:/plots
         - generated-data:/generated-data
 
     test-mysql:
-      image: python3:latest
+      image: python:latest
       container_name: test-mysql
       depends_on:
-        generate_data:
+        generate-data:
           condition: service_completed_successfully
         mysql-standalone :
           condition: service_healthy
         mysql-replica-initiate :
+          condition: service_completed_successfully
+        mysql-sharded-initiate :
           condition: service_completed_successfully
       command: >
         bash -c '
@@ -422,8 +525,23 @@ services:
         python3 mysql.py'
       volumes:
         - ./mysql.py:/mysql.py
+        - ./logs:/logs
         - ./requirements/mysql-requirements.txt:/requirements.txt
         - generated-data:/generated-data
+
+    performance-tests:
+      image: python3:latest
+      container_name: performance-tests
+      depends_on:
+        test-mongo:
+          condition: service_completed_successfully
+        test-mysql:
+          condition: service_completed_successfully
+      command: >
+        bash -c '
+        echo "Test effectués avec succès !"'
+      
+    
 
 
 ### End Python tests ###
@@ -434,6 +552,16 @@ services:
 volumes:
   # Data tests
   generated-data:
+
+  # MySQL Standalone
+  mysql-data:
+
+  # MySQL Replication
+  mysql-master-data:
+  mysql-slave1-data:
+
+  # MySQL Cluster
+  mysql-cluster-data:
 
   # Mongo Standalone
   mongodata:
