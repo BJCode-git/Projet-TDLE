@@ -24,7 +24,7 @@ from psutil import cpu_count, virtual_memory
 from cpuinfo import get_cpu_info
 
 # For logging
-from logging import getLogger, basicConfig, INFO, DEBUG, ERROR, FileHandler
+from logging import getLogger, Formatter, INFO, DEBUG, ERROR, FileHandler
 from sys import stderr
 
 # For animation
@@ -92,11 +92,17 @@ class MongoDB:
 		try:
 			# on crée le dossier  de logs s'il n'existe pas
 			makedirs("logs",exist_ok=True)
-			self.logger.addHandler(FileHandler('logs/mongodb-tests.log'))
+
+			fh = FileHandler('logs/mongodb-tests.log')
+			formatter = Formatter(fmt="[%(levelname)s] %(filename)s:l.%(lineno)d - %(message)s")
+			fh.setFormatter(formatter)
+			self.logger.addHandler(fh)
 
 			mongo_logger = getLogger('pymongo')
 			mongo_logger.setLevel(debug_level)
-			mongo_logger.addHandler(FileHandler('logs/mongodb.log'))
+			fh2 = FileHandler('logs/mongodb.log')
+			fh2.setFormatter(formatter)
+			mongo_logger.addHandler(fh2)
 		
 		except Exception as e:
 			self.logger.error(f"MongoDB.__init__: {e}")
@@ -307,12 +313,13 @@ class MongoDB:
 			self.logger.error(f"Error deleting one data : {e}")
 	
 	# Operations with several documents
-	def create_many(self,data):
+	def create_many(self,data,silent=False):
 		"""
 		Insert several documents in the collection
 		:param data: the documents to insert
 		"""
-		self.__update_operation_count()
+		if not silent:
+			self.__update_operation_count()
 		try:
 			if self.collection.insert_many(data):
 				self.logger.debug(f"Data inserted : {data}")
@@ -484,7 +491,7 @@ def global_test_one(mongo: MongoDB,plot_name :str ,  nb_data:int = num_records):
 	## Test d'insertion de données
 	mongo.logger.debug("Test insert one by one : ")
 	for book in dataset:
-		mongo.create_one(book.__dict__)
+		mongo.create_one(book)
 
 	# Libérer la mémoire
 	dataset.clear()
@@ -501,8 +508,8 @@ def global_test_one(mongo: MongoDB,plot_name :str ,  nb_data:int = num_records):
 	# note : update_dataset contains the original and modified data
 	
 	for update in updated_dataset:
-		original = update[0].__dict__
-		modified = update[1].__dict__
+		original = update[0]
+		modified = update[1]
 	
 		if original == modified:
 			mongo.logger.error(f"Data are the same : \n\t{original} -> \n\t{modified}")
@@ -514,13 +521,13 @@ def global_test_one(mongo: MongoDB,plot_name :str ,  nb_data:int = num_records):
 				if original[key] != modified[key]:
 					new_values = {key: modified[key]}
 					break
-			mongo.update_one(update[0].__dict__,{ "$set": new_values})
+			mongo.update_one(update[0],{ "$set": new_values})
 			
 
 	## Test de suppression de données
 	mongo.logger.debug("Test delete one by one : ")
 	for _,book in updated_dataset:
-		mongo.delete_one(book.__dict__)
+		mongo.delete_one(book)
 
 	# Dessiner les graphiques
 	try:
@@ -561,8 +568,8 @@ def global_test_many(mongo: MongoDB,plot_name :str, nb_data:int = num_records):
 	## Test d'insertion de données
 	mongo.logger.debug("Test insert many : ")
 	for i in range(0,nb_data,num_records_per_many):
-		data = [book.__dict__ for book in dataset[i:i+num_records_per_many]]
-		mongo.create_many(data)
+		#data = [book for book in dataset[i:i+num_records_per_many]]
+		mongo.create_many(dataset[i:i+num_records_per_many],silent=True)
 
 	# vide dataset pour libérer la mémoire
 	dataset.clear()
@@ -570,11 +577,11 @@ def global_test_many(mongo: MongoDB,plot_name :str, nb_data:int = num_records):
 	## Test de mise à jour de données
 	
 	# Chargement des données à modifier
-	updated_dataset = extract_updated_books_from_file(updated_file,nb_data)
+	#updated_dataset = extract_updated_books_from_file(updated_file,nb_data)
 	# note : update_dataset contains the original and modified data
  
 	mongo.logger.debug("Test update many : ")
-	for i in range(0,len(updated_dataset),num_records_per_many):
+	for i in range(0,nb_data,num_records_per_many):
 		# On met à jour les données
 		# Avec le champ "ran" qui est entre O  
 		mongo.update_many({"ran" : i %num_records_per_many},{ "$inc": {"price" : 5.00, "copies_sold": 100} } )
@@ -628,10 +635,8 @@ def test_one_various_data(mongo: MongoDB,plot_name :str, steps=arange(1000,num_r
 
 		# On va insérer les données
 		max_id = 0
-		for book in dataset:
-			mongo.create_one(book.__dict__,silent=True)
-			if book.id > max_id:
-				max_id = book.id + 1
+		max_id = step +1
+		mongo.create_many(dataset,silent=True)
 
 		# On nettoie dataset pour libérer la mémoire
 		dataset.clear()
@@ -700,12 +705,8 @@ def test_many_various_data(mongo: MongoDB,plot_name :str, steps=arange(1000,num_
 			break
 
 		# On va insérer les données
-		max_id = 0
-		for book in dataset:
-			mongo.create_one(book.__dict__,silent=True)
-			if book.id> max_id:
-				max_id = book.id + 1 
-
+		max_id = step +1
+		mongo.create_many(dataset,silent=True)
 		# On nettoie dataset pour libérer la mémoire
 		dataset.clear()
 		
@@ -875,7 +876,6 @@ if __name__ == "__main__":
 	total 			= int(total_test_various + total_test_one + total_test_many )
 	
 
-	
 	progress_T = Thread(target=print_progress, args=((total,)) )
 	progress_T.start()
 	

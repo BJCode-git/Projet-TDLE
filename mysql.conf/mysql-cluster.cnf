@@ -1,0 +1,19 @@
+[ndbd default]
+NoOfReplicas=2
+DataMemory=80M
+IndexMemory=18M
+[ndb_mgmd]
+NodeId=1
+hostname=mysql-manager
+datadir=/var/lib/mysql
+[ndbd]
+NodeId=2
+hostname=mysql-ndbd1
+datadir=/var/lib/mysql
+[ndbd]
+NodeId=3
+hostname=mysql-ndbd2
+datadir=/var/lib/mysql
+[mysqld]
+NodeId=4
+hostname=mysql-node1

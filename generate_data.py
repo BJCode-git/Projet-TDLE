@@ -39,7 +39,7 @@ updated_file			= "generated-data/updated_books.json"
 genres = ["Fiction", "Non-Fiction", "Science", "Fantasy", "Biography", "Romance", "Thriller"]
 @dataclass
 class Book:
-	id: int 					= 0
+	id: str 					= 0
 	title: str 					= ""
 	author: str 				= ""
 	published_date: datetime	= datetime.now()
@@ -102,7 +102,7 @@ def generate_dataset(num_records):
 	
 	return books
 
-def extract_books_from_file(file, max_data:int = num_records) -> list[Book]:
+def extract_books_from_file(file, max_data:int = num_records) -> list[dict]:
 	"""
 		Extract the books from file to a list of Books
 		__param file: str
@@ -122,7 +122,7 @@ def extract_books_from_file(file, max_data:int = num_records) -> list[Book]:
 								copies_sold=item["copies_sold"],
 								price=item["price"],
 								ran=item["ran"]
-							)
+							).__dict__
 						)
 			i+=1
 			if i >= max_data:
@@ -146,7 +146,7 @@ def extract_updated_books_from_file(file, max_data:int = num_records):
 									genre=original["genre"],
 									copies_sold=original["copies_sold"],
 									price=original["price"],
-									ran=original["ran"])
+									ran=original["ran"]).__dict__
 			modified_book = Book(	id=modified["id"],
 									title=modified["title"],
 									author=modified["author"],
@@ -154,7 +154,7 @@ def extract_updated_books_from_file(file, max_data:int = num_records):
 									genre=modified["genre"],
 									copies_sold=modified["copies_sold"],
 									price=modified["price"],
-									ran=modified["ran"])
+									ran=modified["ran"]).__dict__
 			books.append((original_book, modified_book))
 
 			i+=1
@@ -163,7 +163,7 @@ def extract_updated_books_from_file(file, max_data:int = num_records):
 
 	return books
 
-def modify_book(book) -> dict:
+def modify_book(book):
 	global  genres
 	update_faker = Faker("fr_FR")
 	update_faker.seed_instance(9876)

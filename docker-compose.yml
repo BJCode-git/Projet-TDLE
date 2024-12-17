@@ -5,54 +5,99 @@ services:
     mysql-standalone:
       container_name: 'mysql-standalone'
       image: 'mysql:latest'
-      command: --default-authentication-plugin=mysql_native_password
+      #command: #--default-authentication-plugin=mysql_native_password
       ports:
         - 3306:3306
       volumes:
         - mysql-data:/var/lib/mysql
-      env_file:
-        - .env
+      #env_file:
+      #  - .env
+      environment:
+        MYSQL_ROOT_PASSWORD: "root"
+        MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+        MYSQL_PASSWORD:      ${MYSQL_PASSWORD}
+        MYSQL_DATABASE:     "test"
+        MYSQL_USER:         "admin"
 
 
   ### End Standalone ###
 
   ### MySQL Replication ###
 
-    mysql-master:
-      container_name: 'mysql-master'
+    mysql-replica1:
+      container_name: 'mysql-replica1'
+      hostname: 'mysql-replica1'
       image: 'mysql:latest'
-      command: --default-authentication-plugin=mysql_native_password
+      command: --default-authentication-plugin=mysql_native_password --port=3316
       ports:
-        - 3307:3306
+        - 3316:3316
       volumes:
         - mysql-master-data:/var/lib/mysql
       env_file:
         - .env
+      environment:
+        MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+        MYSQL_PASSWORD:      ${MYSQL_PASSWORD}
+        MYSQL_DATABASE:      ${MYSQL_DATABASE}
+        MYSQL_USER:          ${MYSQL_USER}
 
-    mysql-slave1:
-      container_name: 'mysql-slave1'
+    mysql-replica2:
+      container_name: 'mysql-replica2'
+      hostname: 'mysql-replica2'
       image: 'mysql:latest'
       command: --default-authentication-plugin=mysql_native_password
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
       ports:
-        - 3308:3306
+        - 3317:3317
       volumes:
         - mysql-slave1-data:/var/lib/mysql
       env_file:
         - .env
-    
-    ### End Replication ###
+      environment:
+        MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+        MYSQL_PASSWORD:      ${MYSQL_PASSWORD}
+        MYSQL_DATABASE:      ${MYSQL_DATABASE}
+        MYSQL_USER:          ${MYSQL_USER}
 
+    mysql-replica3:
+      container_name: 'mysql-replica3'
+      hostname: 'mysql-replica3'
+      image: 'mysql:latest'
+      command: --default-authentication-plugin=mysql_native_password --port=3318
+      extra_hosts:
+      - "host.docker.internal:host-gateway"
+      ports:
+        - 3318:3318
+      volumes:
+        - mysql-slave1-data:/var/lib/mysql
+      env_file:
+        - .env
+      environment:
+        MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+        MYSQL_PASSWORD:      ${MYSQL_PASSWORD}
+        MYSQL_DATABASE:      ${MYSQL_DATABASE}
+        MYSQL_USER:          ${MYSQL_USER}
+      
     ### Initiate Replication ###
     mysql-replica-initiate:
       image: mysql:latest
       container_name: 'mysql-replica-initiate'
       entrypoint: >
         bash -c '
-          mysql -u root -p${MYSQL_ROOT_PASSWORD} -e "CHANGE MASTER TO MASTER_HOST=\"mysql-master\", MASTER_USER=\"repl\", MASTER_PASSWORD=\"repl\", MASTER_AUTO_POSITION=1; START SLAVE;"'
+          mysql -u root -p${MYSQL_PASSWORD} -e "CHANGE MASTER TO MASTER_HOST=\"mysql-replica1\", MASTER_USER=\"${MYSQL_USER}\", MASTER_PASSWORD=\"${MYSQL_PASSWORD}\", MASTER_AUTO_POSITION=1; START SLAVE;"'
       depends_on:
-        - mysql-master
-        - mysql-slave1
+        - mysql-replica1
+        - mysql-replica2
+        - mysql-replica3
       restart: on-failure
+      env_file:
+        - .env
+      environment:
+        MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+        MYSQL_PASSWORD:      ${MYSQL_PASSWORD}
+        MYSQL_DATABASE:      ${MYSQL_DATABASE}
+        MYSQL_USER:          ${MYSQL_USER}
   
     ### End Initiate Replication ###
 
@@ -61,42 +106,105 @@ services:
   ### MySQL Cluster ###
 
     mysql-manager: 
-      container_name: 'mysql-cluster'
-      image: 'mysql/mysql-cluster:latest'
-      command : --name=management1  --ip=127.0.0.1 --port=1186
-      ports:
-        - 1186:1186
+      container_name: 'mysql-manager'
+      hostname: 'mysql-manager'
+      image: 'mysql/mysql-cluster:8.0'
+      command : ndb_mgmd  --ndb-nodeid=1 #--reload --config-dir=/etc/ --config-file=/etc/mysql-cluster.cnf
+      networks:
+        mysql-network :
+            ipv4_address: 192.168.0.2
       volumes:
+       - ./mysql.conf/my.cnf:/etc/my.cnf
+       - ./mysql.conf/mysql-cluster.cnf:/etc/mysql-cluster.cnf
         - mysql-cluster-data:/var/lib/mysql
       env_file:
+        - .env
+
+    mysql-ndbd1:
+      container_name: 'mysql-ndbd1'
+      image: 'mysql/mysql-cluster:8.0'
+      command : ndbd 
+      networks:
+         mysql-network :
+             ipv4_address: 192.168.0.3
+      volumes:
+       - ./mysql.conf/my.cnf:/etc/my.cnf
+       - ./mysql.conf/mysql-cluster.cnf:/etc/mysql-cluster.cnf
+        - mysql-cluster-data:/var/lib/mysql
+      env_file:
+        - .env
+
+    mysql-ndbd2:
+      container_name: 'mysql-ndbd2'
+      image: 'mysql/mysql-cluster:8.0'
+      command : ndbd 
+      networks:
+              mysql-network :
+                  ipv4_address: 192.168.0.4
+      volumes:
+       - ./mysql.conf/my.cnf:/etc/my.cnf
+       - ./mysql.conf/mysql-cluster.cnf:/etc/mysql-cluster.cnf
+        - mysql-cluster-data:/var/lib/mysql
+      env_file: 
         - .env
 
     mysql-node1:
       container_name: 'mysql-node1'
-      image: 'mysql/mysql-cluster:latest'
-      command : --name=ndb1  --ip=127.0.0.2 --port=3306
+      image: 'mysql/mysql-cluster:8.0'
+      command : mysqld --default-authentication-plugin=mysql_native_password #--ndb-nodeid=4 --ndb-connectstring=mysql-manager:1186 --bind-address=0.0.0.0 #:3329
       ports:
-        - 3306:3306
+        - 3329:3306
+      networks:
+        mysql-network :
+            ipv4_address: 192.168.0.10
       volumes:
+       - ./mysql.conf/my.cnf:/etc/my.cnf
+       - ./mysql.conf/mysql-cluster.cnf:/etc/mysql-cluster.cnf
         - mysql-cluster-data:/var/lib/mysql
       env_file:
         - .env
+      environment:
+        MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+        MYSQL_PASSWORD:      ${MYSQL_PASSWORD}
+        MYSQL_DATABASE:      ${MYSQL_DATABASE}
+        MYSQL_USER:          ${MYSQL_USER}
+        SERVICE_TAGS: dev
+        SERVICE_NAME: mysql
 
-    mysql-node2:
-      container_name: 'mysql-node2'
-      image: 'mysql/mysql-cluster:latest'
-      command : --name=ndb2  --ip=127.0.0.2 --port=3306
+
 
     mysql-sharded-initiate:
-      image: mysql:latest
+      image: mysql/mysql-cluster:8.0
       container_name: 'mysql-sharded-initiate'
-      entrypoint: >
+      networks:
+        - mysql-network
+      entrypoint:
         bash -c '
-          mysql -u root -p${MYSQL_ROOT_PASSWORD} -e "CREATE DATABASE test; USE test; CREATE TABLE test (id INT PRIMARY KEY, name VARCHAR(255));"'
+          mysql -u root -p${MYSQL_PASSWORD} -h 192.168.0.10 -e "
+          CREATE DATABASE IF NOT EXISTS test;
+          USE test;
+          CREATE TABLE IF NOT EXISTS test (
+              id INT NOT NULL,
+              title VARCHAR(255) NOT NULL,
+              author VARCHAR(255) NOT NULL,
+              published_date DATE,
+              genre VARCHAR(100),
+              price FLOAT,
+              copies_sold INT NOT NULL,
+              rand INT
+          )" 
+
+
+          exit 0'
       depends_on:
-        - mysql-manager
-        - mysql-node1
-        - mysql-node2
+        mysql-manager:
+          condition: service_started
+        mysql-ndbd1:
+          condition: service_started
+        mysql-ndbd2:
+          condition: service_started
+        mysql-node1:
+          condition: service_healthy
       restart: on-failure
   
   ### Mongo Standalone ###
@@ -128,28 +236,6 @@ services:
         - 27018:27018
       extra_hosts:
         - "host.docker.internal:host-gateway"
-      #healthcheck:
-      #  test: echo "try { 
-      #                  rs.status() 
-      #              } 
-      #              catch (err) { 
-      #                rs.initiate(
-      #                              {
-      #                                _id:'rs0',
-      #                                members:[
-      #                                          {_id:0,host:'mongo-replica1:27018',priority:1},
-      #                                          {_id:1,host:'mongo-replica2:27019',priority:0.5},
-      #                                          {_id:2,host:'mongo-replica3:27020',priority:0.5}
-      #                                        ]
-      #                              }
-      #                            ) 
-      #                }" 
-      #        | mongosh --port 27018 --quiet
-      #  interval: 5s
-      #  timeout: 30s
-      #  start_period: 0s
-      #  start_interval: 1s
-      #  retries: 30
       volumes:
         - "mongo-replica1_data:/data/db"
         - "mongo-replica1_config:/data/configdb"
@@ -535,6 +621,18 @@ services:
         - ./plots/:/plots
         - generated-data:/generated-data
 
+
+    start_mysql:
+      image: alpine:latest
+      container_name: start_mysql
+      command: echo "MySQL is started !"
+      depends_on:
+        mysql-standalone :
+          condition: service_started
+        mysql-sharded-initiate :
+          condition: service_completed_successfully
+      restart: on-failure
+
     test-mysql:
       image: python:latest
       container_name: test-mysql
@@ -626,4 +724,10 @@ volumes:
   shardsvr2_3:
 
   
-#networks:
+networks:
+  # Sous réseau pour les tests : 192.168.0.0/16
+  mysql-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.0.0/24
