@@ -1,6 +1,10 @@
 # For loading environment variables
 from os 		import getenv , makedirs
 from dotenv 	import load_dotenv
+
+# for arg parsing
+from argparse import ArgumentParser
+
 # For Mongo DB operations
 from pymongo	import MongoClient, IndexModel
 # For measuring operation time
@@ -8,7 +12,9 @@ from pymongo	import monitoring
 #from time		import perf_counter_ns
 #from time		import sleep
 
-from numpy import arange
+#  For statistics
+from numpy import arange, median as np_median, mean, percentile
+from numpy.random import normal
 
 # For generating data and handling data
 from generate_data import extract_books_from_file, extract_updated_books_from_file
@@ -17,6 +23,8 @@ from generate_data import num_records, num_records_per_many, generated_file, upd
 
 # for graphing
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
+from matplotlib.lines import Line2D
 
 # For system information
 from platform import system, release, machine, architecture, python_version
@@ -25,7 +33,6 @@ from cpuinfo import get_cpu_info
 
 # For logging
 from logging import getLogger, Formatter, INFO, DEBUG, ERROR, FileHandler
-from sys import stderr
 
 # For animation
 from alive_progress import alive_bar
@@ -407,65 +414,104 @@ def print_failed_operations():
 
 	failed_operations.clear()
 
-def violin_plot_operation_times(test_name=""):
+def violin_plot_operation_times(test_type="test",test_name=""):
 	"""
 	Plot the times of the operations
 	"""
 	global operation_times
 	
 	# On crée un dossier pour les graphiques
-	makedirs(f"plots/MongoDB/{test_name}", exist_ok=True)
+	makedirs(f"plots/MongoDB/{test_type}/{test_name}", exist_ok=True)
  
 	# On va créer un graphique pour chaque opération, on affiche que l'opération courante
 	for operation in operation_times:
 
-		plt.violinplot(operation_times[operation],
-						showmeans=True, showextrema=True, 
-						showmedians=True, quantiles=None,
-						points=len(operation_times[operation])
-						)	
-		plt.title("Temps mesuré pour réaliser l\'opération")
+		data = operation_times[operation]
 
-		plt.xlabel("Occurence de l'opération : " + operation)
-		plt.ylabel('Time (µs)')
-		#plt.annotate(system_info, (0,0), (0, -40), xycoords='axes fraction', textcoords='offset points', va='top')
-		#plt.legend()
-		# On sauvegarde la figure
-		plt.savefig(f"plots/MongoDB/{test_name}/{operation}.png")
+		# Création d'un modèle de graphique
+		fig, ax = plt.subplots(figsize=(10, 6))
+
+		# Création du graphe violon
+		violin_parts = ax.violinplot(data,  showmeans=True, showmedians=True, showextrema= False, quantiles=[0.25,0.75],points=len(data))
+
+		# Couleurs des quartiles
+		quartile_colors = ['#9999FF','#99FF99','#FF9999' ]  # Bleu, Vert, Rouge
+		for body, color in zip(violin_parts['bodies'], quartile_colors):
+			body.set_facecolor(color)
+			body.set_alpha(0.6)
+
+		# Calcul des stats : médiane, moyenne et quartiles
+		q1,q3 ,median, mean = 0, 0, 0, 0
+		q1		= percentile(data, 25)
+		q3		= percentile(data, 75)
+		median	= np_median(data)
+		mean	= mean(data)
+		
+
+		# Ajout du nuage de points 
+		x = normal(loc=1, scale=0.05, size=len(data))  # Ajout de jitter pour éviter l'empilement
+		y = data
+		ax.scatter(x, y, alpha=0.4, color="teal" , s=2, label=f"Nuage de points")
+
+
+		# Personnalisation des lignes
+		violin_parts['cmedians'].set_color('green')  # Ligne médiane
+		violin_parts['cmeans'].set_color('purple')  # Ligne moyenne
+		violin_parts['cmeans'].set_linestyle('dashed')  # Moyenne en pointillés
+		violin_parts['bodies'][0].set_label('Densité')  # Légende pour la densité
+		violin_parts['cquantiles'].set_color('blue')  # Changer la couleur des lignes de quantiles
+		violin_parts['cquantiles'].set_linestyle('dashed')   # Style de ligne pleine
+
+		# Légende
+		legend_elements = [
+			Patch(facecolor='#9999FF', alpha=0.7, label='Densité'),
+			Line2D([0], [0], color='green'	, label=f'Médiane : {median:.2f}'),
+			Line2D([0], [0], color='purple'	, label=f'Moyenne : {mean:.2f}'),
+			Line2D([0], [0], color='blue'	, label=f'Quartiles 1 (25%) : {q1:.2f}'),
+			Line2D([0], [0], color='blue'	, label=f'Quartiles 3 (75%) : {q3:.2f}'),
+			Line2D([0], [0], marker='o'		, color='w', markerfacecolor='teal', markersize=4, label='Nuage de points'),
+		]
+		ax.legend(handles=legend_elements, loc='upper right', title=f"{test_name} - {operation}")
+
+		# Ajout des labels et du titre
+		ax.set_title(f"Temps mesuré pour réaliser l'opération: {operation}")
+		ax.set_ylabel("Temps (µs)")
+  
+		plt.savefig(f"plots/MongoDB/{test_type}/{test_name}/{operation}.png")
 
 		# On réinitialise le graphique
 		plt.clf()
 
-def plot_operation_times( data = dict, test_name=""):
+def plot_operation_times( data = dict,test_type="test",test_name=""):
 	"""
 		Affiche le temps des opérations selon la quantité de données dans la base de données
 	"""
-	global operation_times
 
 	# On crée un dossier pour les graphiques
-	makedirs(f"plots/MongoDB/{test_name}", exist_ok=True)
- 
+	makedirs(f"plots/MongoDB/{test_type}/{test_name}", exist_ok=True)
+	
 	# On va créer un graphique pour chaque opération, on affiche que l'opération courante
 	for operation in data:
+		
 		# On récupère les données de temps en y et les données en x (quantité de données)
-		x = [data[operation][i][0] for i in range(len(data[operation]))]
-		y = [data[operation][i][1] for i in range(len(data[operation]))]
-		# On affiche les données en x et en y
-		plt.plot(x,y, label=f"{operation} : µs" )
-		plt.title("Temps d'opération en fonction de la quantité de données")
+		# data[operation] = [(nb_donnees,[liste des temps])]
+		nb_donnees	= [data[operation][i][0] for i in range(len(data[operation]))]
+		moyens		= [mean(data[operation][i][1]) for i in range(len(data[operation]))]
+		# On affiche le temps moyen en µs en fonction de la quantité de données
+		plt.plot(nb_donnees,moyens, label=f"{operation} : µs" )
+		plt.title("Temps moyen d'opération en fonction de la quantité de données")
 		plt.xlabel("Données dans la base de données")
 		plt.ylabel('Time (µs)')
 		plt.legend()
 
 		# On sauvegarde la figure
-		plt.savefig(f"plots/MongoDB/{test_name}/{operation}.png")
+		plt.savefig(f"plots/MongoDB/{test_type}/{test_name}/{operation}.png")
 
 		# On réinitialise le graphique
 		plt.clf()
 	
 	if len(data) == 0:
 		print("No data to plot")
-
 
 
 ######### Tests de performance #########
@@ -531,7 +577,7 @@ def global_test_one(mongo: MongoDB,plot_name :str ,  nb_data:int = num_records):
 
 	# Dessiner les graphiques
 	try:
-		violin_plot_operation_times(plot_name)
+		violin_plot_operation_times(plot_name,"global_test_one")
 	except Exception as e:
 		mongo.logger.error(f"global_test_one : error plotting -> {e}")
 
@@ -581,7 +627,7 @@ def global_test_many(mongo: MongoDB,plot_name :str, nb_data:int = num_records):
 	# note : update_dataset contains the original and modified data
  
 	mongo.logger.debug("Test update many : ")
-	for i in range(0,nb_data,num_records_per_many):
+	for i in range(0,num_records_per_many):
 		# On met à jour les données
 		# Avec le champ "ran" qui est entre O  
 		mongo.update_many({"ran" : i %num_records_per_many},{ "$inc": {"price" : 5.00, "copies_sold": 100} } )
@@ -590,7 +636,8 @@ def global_test_many(mongo: MongoDB,plot_name :str, nb_data:int = num_records):
  
 	## Test de lecture de données
 	mongo.logger.debug("Test read all : ")
-	mongo.read(print_result=False)
+	for i in range(0,num_records_per_many):
+		mongo.read_many({"ran" : i},print_result=False)
 
 	## Test de suppression de données
 	mongo.logger.debug("Test delete many : ")
@@ -601,7 +648,7 @@ def global_test_many(mongo: MongoDB,plot_name :str, nb_data:int = num_records):
 
 	# Dessiner les graphiques
 	try:
-		violin_plot_operation_times(plot_name)
+		violin_plot_operation_times(plot_name,"global_test_many")
 	except Exception as e:
 		mongo.logger.error(f"global_test_many : error plotting -> {e}")
 	
@@ -622,61 +669,65 @@ def test_one_various_data(mongo: MongoDB,plot_name :str, steps=arange(1000,num_r
 
 	mongo.logger.info("Test one by one with various data "+ plot_name)
 	
-	tests_data = {}
-	for step in steps:
+	tests_data = dict()
+	try:
+		for step in steps:
+			
+			# On supprime toutes les données de la collection s'il y en a
+			mongo.drop_all()
+
+			# On va extraire les données, pour opérer sur les mêmes données
+			dataset = extract_books_from_file(generated_file,step)
+			if len(dataset) < step:
+				mongo.logger.error(f"Gathered {len(dataset)} records instead of {step}")
+
+			# On va insérer les données
+			
+			mongo.create_many(dataset,silent=True)
+
+			# On nettoie dataset pour libérer la mémoire
+			dataset.clear()
+			
+			# On nettoie les temps des opérations, 
+			# pour recommencer les mesures
+			operation_times.clear()
+
+			# On procède au test de performance
+			max_id 			 = step +1
+			generate_book.id = max_id
+			book = generate_book(max_id)
+
+			# On nettoie les temps des opérations, 
+			# pour recommencer les mesures
+			operation_times.clear()
+			
+			# On teste l'insertion
+			mongo.create_one(book)
+
+			# On teste la lecture
+			mongo.read_one({"id":book["id"]})
+
+			# On teste la mise à jour
+			new_book = modify_book(book)
+			mongo.update_one({"id":book["id"]}, {"$set": new_book})
 		
-		# On supprime toutes les données de la collection s'il y en a
-		mongo.drop_all()
+			# On teste la suppression
+			mongo.delete_one({"id":book["id"]})
 
-		# On va extraire les données, pour opérer sur les mêmes données
-		dataset = extract_books_from_file(generated_file,step)
-		if len(dataset) < step:
-			mongo.logger.error(f"Gathered {len(dataset)} records instead of {step}")
+			# On récupère les temps des opérations et 
+			# On ajoute les données dans le tableau
+			for operation in operation_times:
+				if operation in tests_data:
+					tests_data[operation].append((step,operation_times[operation]))
+				else:
+					tests_data[operation] = [(step,operation_times[operation])]
 
-		# On va insérer les données
-		max_id = 0
-		max_id = step +1
-		mongo.create_many(dataset,silent=True)
-
-		# On nettoie dataset pour libérer la mémoire
-		dataset.clear()
-		
-		# On nettoie les temps des opérations, 
-		# pour recommencer les mesures
-		operation_times.clear()
-
-		# On procède au test de performance
-		generate_book.id = max_id
-		book = generate_book(max_id)
-		# Pour la mise à jour
-		new_book = modify_book(book)
-		
-
-		# On teste l'insertion
-		mongo.create_one(book)
-
-		# On teste la lecture
-		mongo.read_one({"id":book["id"]})
-
-
-		mongo.update_one({"id":book["id"]}, {"$set": new_book})
-	
-		# On teste la suppression
-		mongo.delete_one({"id":book["id"]})
-
-		# On récupère les temps des opérations
-		data = operation_times.copy()
-
-		# On ajoute les données dans le tableau
-		for operation in data:
-			if operation in tests_data:
-				tests_data[operation].append((step,data[operation]))
-			else:
-				tests_data[operation] = [[step,data[operation]]]
+	except Exception as e:
+		mongo.logger.error(f"test_one_various_data : operation error -> {e}")
 
 	# On dessine les graphiques
 	try:
-		plot_operation_times(tests_data,plot_name)
+		plot_operation_times(tests_data,plot_name,"test_one_various_data")
 	except Exception as e:
 		mongo.logger.error(f"test_one_various_data : error plotting -> {e}")
  
@@ -691,65 +742,68 @@ def test_many_various_data(mongo: MongoDB,plot_name :str, steps=arange(1000,num_
  
 	mongo.logger.info("Test many with various data " + plot_name)
 
-	tests_data = {}
-	for step in steps:
-		
-		# On supprime toutes les données de la collection s'il y en a
-		mongo.drop_all()
-
-		# On va extraire les données, pour opérer sur les mêmes données
-		dataset = extract_books_from_file(generated_file,step)
-  
-		if len(dataset) < step:
-			mongo.logger.error(f"Gathered {len(dataset)} records instead of {step}")
-			break
-
-		# On va insérer les données
-		max_id = step +1
-		mongo.create_many(dataset,silent=True)
-		# On nettoie dataset pour libérer la mémoire
-		dataset.clear()
-		
-		# On nettoie les temps des opérations, 
-		# pour recommencer les mesures
-		operation_times.clear()
-
-		## On procède au test de performance
-
-		# Génère les données à insérer
-		generate_book.id 	= max_id
-
-		books = [generate_book(max_id + i) for i in range(0,num_records_per_many)]
-		# Modifie le prix à 0 pour la suppression/lecture exacte de num_records_per_many données
-		# en effet un prix à 0 est impossible pour un livre, ce seront donc les données à supprimer
-		for i in range(0,len(books)):
-			books["price"] = 0.0
-
-		# On teste l'insertion
-		mongo.create_many([book for book in books])
-
-		# On teste la lecture
-		mongo.read_many({"price":0.0})
-
-		# On teste la mise à jour
-		mongo.update_many({"price":0.00}, {"$set": {"genre": "updated"} })
+	tests_data = dict()
 	
-		# On teste la suppression
-		mongo.delete_many({"price":0.0})
+	try:
+		for step in steps:
+			
+			# On supprime toutes les données de la collection s'il y en a
+			mongo.drop_all()
 
-		# On récupère les temps des opérations
-		data = operation_times.copy()
-
-		# On ajoute les données dans le tableau
-		for operation in data:
-			if operation in tests_data:
-				tests_data[operation].append((step,data[operation]))
-			else:
-				tests_data[operation] = [[step,data[operation]]]
+			# On va extraire les données, pour opérer sur les mêmes données
+			dataset = extract_books_from_file(generated_file,step)
 	
+			if len(dataset) < step:
+				mongo.logger.error(f"Gathered {len(dataset)} records instead of {step}")
+				break
+
+			# On va insérer les données
+			mongo.create_many(dataset,silent=True)
+			# On nettoie le dataset pour libérer la mémoire
+			dataset.clear()
+	
+			## On procède au test de performance
+
+			# Génère les données à insérer
+			max_id			 = step + 1
+			generate_book.id = max_id
+			books = [generate_book(max_id + i) for i in range(0,num_records_per_many)]
+			# Modifie le prix à 0 pour la suppression/lecture exacte de num_records_per_many données
+			# en effet un prix à 0 est impossible pour un livre, ce seront donc les données à supprimer
+			
+			for book in books:
+				book["price"] = 0.0
+
+			# On nettoie les temps des opérations, 
+			# pour recommencer les mesures
+			operation_times.clear()
+
+			# On teste l'insertion
+			mongo.create_many(books)
+
+			# On teste la lecture
+			mongo.read_many({"price":0.0})
+
+			# On teste la mise à jour
+			mongo.update_many({"price":0.00}, {"$set": {"genre": "updated"} })
+	
+			# On teste la suppression
+			mongo.delete_many({"price":0.0})
+	
+			# On récupère les temps des opérations et
+			# on ajoute les données dans le tableau
+			for operation in operation_times:
+				if operation in tests_data:
+					tests_data[operation].append((step,operation_times[operation]))
+				else:
+					tests_data[operation] = [(step,operation_times[operation])]
+
+	except Exception as e:
+		mongo.logger.error(f"test_many_various_data : operation error -> {e}")
+
 	# On dessine les graphiques
 	try:
-		plot_operation_times(tests_data,plot_name)
+		plot_operation_times(tests_data,plot_name,"test_many_various_data")
 	except Exception as e:
 		mongo.logger.error(f"test_many_various_data: error plotting -> {e}")
   
@@ -774,62 +828,65 @@ def test_indexed(mongo: MongoDB,plot_name :str, test_function,**kwargs):
 	# on va faire les mêmes tests que précédemment
 	test_function(mongo,plot_name,**kwargs)
 
-def run_tests(mongo: MongoDB, type_test:str):
-	# Without indexed tests
-	try:
-		if mongo is None:
-			raise ValueError("MongoDB instance is None")
-
-		# Supprimer les index si existants
-		mongo.drop_indexes()
-		try:
-			print_progress.text = "Running "+type_test + "_global_one..."
-			global_test_one(mongo, type_test + "_global_one")
-		except Exception as e:
-			mongo.logger.error(f"Error with global_test_one : {e}")
-		#try:
-		#	print_progress.text = "Running"+type_test + "_global_many..."
-		#	global_test_many(mongo, type_test + "_global_many")
-		#except Exception as e:
-		#	mongo.logger.error(f"Error with global_test_many : {e}")
-		try:
-			print_progress.text = "Running "+type_test + "_various_one..."
-			test_one_various_data(mongo, type_test + "_various_one")
-		except Exception as e:
-			mongo.logger.error(f"Error with test_one_various_data : {e}")
-		#try:
-		#	print_progress.text = "Running "+type_test + "_various_many..."
-		#	test_many_various_data(mongo, type_test + "_various_many")
-		#except Exception as e:
-		#	mongo.logger.error(f"Error with test_many_various_data : {e}")
-   
-   
-		# With indexed tests
-		try:
-			print_progress.text = "Running "+type_test + "_global_one_indexed..."
-			test_indexed(mongo, type_test + "_global_one_indexed", global_test_one)
-		except Exception as e:
-			mongo.logger.error(f"Error with global_test_one_indexed : {e}")
-		#try:
-		#	print_progress.text = "Running "+type_test + "_global_many_indexed..."
-		#	test_indexed(mongo, type_test + "_global_many_indexed", global_test_many)
-		#except Exception as e:
-		#	mongo.logger.error(f"Error with global_test_many_indexed : {e}")
-		try:
-			print_progress.text = "Running "+type_test + "_various_one_indexed..."
-			test_indexed(mongo, type_test + "_various_one_indexed", test_one_various_data)
-		except Exception as e:
-			mongo.logger.error(f"Error with test_one_various_data_indexed : {e}")
-		#try:
-		#	print_progress.text = "Running "+type_test + "_various_many_indexed..."
-		#	test_indexed(mongo, type_test + "_various_many_indexed", test_many_various_data)
-		#except Exception as e:
-		#	mongo.logger.error(f"Error with test_many_various_data_indexed : {e}")
-  
-	except Exception as e:
-		print(f"run_tests : error -> {e}")
-		raise e
+def run_tests(mongo: MongoDB, type_test:str, steps=arange(1000,num_records,num_records/10000)):
 	
+	if mongo is None:
+		raise ValueError("MongoDB instance is None")
+
+	# Supprimer les index si existants
+	mongo.drop_indexes()
+
+	# Without indexes tests
+	try:
+		print_progress.text = "Running "+type_test + "_global_one..."
+		global_test_one(mongo, type_test)
+	except Exception as e:
+		mongo.logger.error(f"Error with global_test_one : {e}")
+
+	try:
+		print_progress.text = "Running"+type_test + "_global_many..."
+		global_test_many(mongo, type_test)
+	except Exception as e:
+		mongo.logger.error(f"Error with global_test_many : {e}")
+
+	try:
+		print_progress.text = "Running "+type_test + "_various_one..."
+		test_one_various_data(mongo, type_test,steps=steps)
+	except Exception as e:
+		mongo.logger.error(f"Error with test_one_various_data : {e}")
+
+	try:
+		print_progress.text = "Running "+type_test + "_various_many..."
+		test_many_various_data(mongo, type_test,steps=steps)
+	except Exception as e:
+		mongo.logger.error(f"Error with test_many_various_data : {e}")
+
+	# With indexes tests
+	try:
+		print_progress.text = "Running "+type_test + "_global_one_indexed..."
+		test_indexed(mongo, type_test, global_test_one)
+	except Exception as e:
+		mongo.logger.error(f"Error with global_test_one_indexed : {e}")
+
+	try:
+		print_progress.text = "Running "+type_test + "_global_many_indexed..."
+		test_indexed(mongo, type_test + "_indexed", global_test_many)
+	except Exception as e:
+		mongo.logger.error(f"Error with global_test_many_indexed : {e}")
+
+	try:
+		print_progress.text = "Running "+type_test + "_various_one_indexed..."
+		test_indexed(mongo, type_test + "_indexed", test_one_various_data,steps=steps)
+	except Exception as e:
+		mongo.logger.error(f"Error with test_one_various_data_indexed : {e}")
+
+	try:
+		print_progress.text = "Running "+type_test + "_various_many_indexed..."
+		test_indexed(mongo, type_test + "_indexed", test_many_various_data,steps=steps)
+	except Exception as e:
+		mongo.logger.error(f"Error with test_many_various_data_indexed : {e}")
+
+
 
 def print_progress(total,text="Running tests..."):
 	global operations_done, operation_Event	
@@ -857,64 +914,103 @@ if __name__ == "__main__":
 	# On charge la configuration
 	get_configuration()
  
-	# calcul le nombre total d'opérations à effectuer pour une seule instance de run_tests
+	parser = ArgumentParser(description="MongoDB performance tests")
+	parser.add_argument("--verbose",	help="increase output verbosity",	action="store_true")
+	# Ajouter des arguments pour savoir quel(s) test(s) effectuer 
+	parser.add_argument("--standalone", help="Run tests with a standalone",	action="store_true" )
+	parser.add_argument("--replica", 	help="Run tests with replica set",	action="store_true" )
+	parser.add_argument("--sharded", 	help="Run tests with shards ",		action="store_true" )
+	parser.add_argument("--all", 		help="Run all tests", 				action="store_true" )
  
-	# opérations pour 2 test_various_one = 2 * len(steps) * ( update_one + read_one + create_one + delete_one) = 8 * len(steps)
-	# opérations pour 2 test_various_many = 2 * len(steps) * ( update_many + read_many + create_many + delete_many) = 8 * len(steps)
-	# opérations pour 2 test_one = 2 * ( update_one + read_one + create_one + delete_one) * num_records = 16 * num_records
-	# opérations pour 2 test_many = 2 * ( update_many + read_many + create_many + delete_many)* num_records/num_records_per_many = 16 * num_records/num_records_per_many
- 	# Au total -> 8 * len(steps) + 8 * len(steps) + 16 * num_records + 16 * num_records/num_records_per_many = 
-	# 
-	
-	steps = arange(1000,num_records,num_records/10)
+	args = parser.parse_args()
+
+	if (not args.standalone) and (not args.replica) and (not args.sharded) and (not args.all):
+		#parser.error("No action requested, add --standalone, --replica, --sharded or --all")
+		args.all = True
+
+	steps	= arange(1000,num_records,num_records/100)
 	size 	= len(steps)
-	del steps
  
-	total_test_various = 8 * size + 8 * size
-	total_test_one	= 16 * num_records
-	total_test_many = 16 * num_records/num_records_per_many
-	total 			= int(total_test_various + total_test_one + total_test_many )
+	# Calcul le nombre total d'opérations à effectuer pour l'affichage de la progression pour une instance de test
+	# 2* à chaque fois car test avec et sans index, 4 fois car 4 tests
+	total_test_various_one 	= 2 * 4 * size
+	total_test_various_many = 2 * 4 * size
+	total_test_one			= 2 * 4 * num_records
+	#	num_records/num_records_per_many insertion de num_records_per_many données
+	#	num_records_per_many CRUD operations
+	total_test_many 		= 2 * ( num_records/num_records_per_many + 3 * num_records_per_many)
+	total 					= int(total_test_various_one + total_test_various_many + total_test_one + total_test_many )
+	coeff = 0
+ 
+	if args.standalone or args.all:
+		coeff += 1
+	if args.replica or args.all:
+		coeff += 1
+	if args.sharded or args.all:
+		coeff += 1
+
+	# On multiplie par le nombre de tests
+	total *= coeff
 	
 
+	print("Running tests ...")
 	progress_T = Thread(target=print_progress, args=((total,)) )
 	progress_T.start()
 	
 	errors = ""
+	debug_level = DEBUG if args.verbose else INFO
+	mongo_standalone	= None
+	mongo_replica		= None
+	mongo_sharded		= None
 	
-	try:
-		mongo_standalone = MongoDB(debug_level=INFO)
-		print_progress.text = "Tests en mode standalone..."
-		run_tests(mongo_standalone, "single_instance")
-	except Exception as e:
-		print(f"Erreur avec le test en standalone: {e}")
-		errors += f"Erreur avec le test en standalone: {e}\n"
-	finally:
-		if mongo_standalone is not None:
-			del mongo_standalone
-	
+	if args.standalone or args.all:
+		try:
 
-	try:
-		mongo_replica = MongoDB(using_replica_set=True,debug_level=INFO)
-		print_progress.text = "Tests en mode Replica..."
-		#run_tests(mongo_replica, "replica_set")
-	except Exception as e:
-		print(f"Erreur avec le test avec Replica Set: {e}")
-		errors += f"Erreur avec le test avec Replica Set: {e}\n"
-	finally:
-		if mongo_replica is not None:
-			del mongo_replica
-  
-	try:
-		mongo_sharded = MongoDB(using_sharded_cluster=True,debug_level=INFO)
-		print_progress.text = "Tests en mode Sharded..."
-		#run_tests(mongo_sharded, "sharding")
-	except Exception as e:
-		print(f"Erreur avec le test avec Shards: {e}")
-		errors += f"Erreur avec le test avec Shards: {e}\n"
-	finally:
-		if mongo_sharded is not None:
-			del mongo_sharded
-  
+			mongo_standalone = MongoDB(debug_level=debug_level)
+			print_progress.text = "Tests en mode standalone..."
+			run_tests(mongo_standalone, "standalone" ,steps=steps)
+
+		except Exception as e:
+
+			print(f"Erreur avec le test en standalone: {e}")
+			errors += f"Erreur avec le test en standalone: {e}\n"
+
+		finally:
+			if mongo_standalone is not None:
+				del mongo_standalone
+	
+	if args.replica or args.all:
+		try:
+
+			mongo_replica = MongoDB(using_replica_set=True,debug_level=debug_level)
+			print_progress.text = "Tests en mode Replica..."
+			run_tests(mongo_replica, "replica_set", steps=steps)
+
+		except Exception as e:
+
+			print(f"Erreur avec le test avec Replica Set: {e}")
+			errors += f"Erreur avec le test avec Replica Set: {e}\n"
+		finally:
+
+			if mongo_replica is not None:
+				del mongo_replica
+
+	if args.sharded or args.all:
+		try:
+
+			mongo_sharded = MongoDB(using_sharded_cluster=True,debug_level=debug_level)
+			print_progress.text = "Tests en mode Sharded..."
+			run_tests(mongo_sharded, "sharding", steps=steps)
+
+		except Exception as e:
+
+			print(f"Erreur avec le test avec Shards: {e}")
+			errors += f"Erreur avec le test avec Shards: {e}\n"
+
+		finally:
+			if mongo_sharded is not None:
+				del mongo_sharded
+
 	# On finit le thread de progressions
 	print_progress.run = False
 	operation_Event.set()
@@ -922,4 +1018,3 @@ if __name__ == "__main__":
 	
 	print("End of tests")
 	print(errors)
-	

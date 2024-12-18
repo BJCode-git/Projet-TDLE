@@ -163,7 +163,7 @@ def extract_updated_books_from_file(file, max_data:int = num_records):
 
 	return books
 
-def modify_book(book):
+def modify_book(book:dict) -> dict:
 	global  genres
 	update_faker = Faker("fr_FR")
 	update_faker.seed_instance(9876)
