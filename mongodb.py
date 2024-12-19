@@ -1,5 +1,5 @@
 # For loading environment variables
-from os 		import getenv , makedirs
+from os 		import getenv , makedirs,path, remove
 from dotenv 	import load_dotenv
 
 # for arg parsing
@@ -13,13 +13,14 @@ from pymongo	import monitoring
 #from time		import sleep
 
 #  For statistics
-from numpy import arange, median as np_median, mean, percentile
+from numpy import arange, median as np_median, mean as np_mean, percentile
 from numpy.random import normal
 
 # For generating data and handling data
-from generate_data import extract_books_from_file, extract_updated_books_from_file
-from generate_data import generate_book,Book , modify_book 
-from generate_data import num_records, num_records_per_many, generated_file, updated_file, get_configuration
+from generate_data import extract_books_from_file, extract_updated_books_from_file ,generated_file, updated_file
+from generate_data import generate_book, modify_book #, Book 
+from generate_data import num_records, num_records_per_many, nb_measurements
+from generate_data import  get_configuration
 
 # for graphing
 import matplotlib.pyplot as plt
@@ -67,10 +68,10 @@ class CommandLogger(monitoring.CommandListener):
 	def succeeded(self, event):
 		global operation_times
 
-		# On ne prend pas en compte les commandes de buildinfo et endSessions
-		if event.command_name in ["buildinfo","endSessions","createIndexes"]:
+		# On ne prend pas en comptes toutes les informations
+		if event.command_name not in ["delete","find","insert","update"]:
 			return
-   
+
 		# On récupère le temps de l'opération
 		operation_time = event.duration_micros
 		# On récupère le nom de l'opération
@@ -92,23 +93,25 @@ class CommandLogger(monitoring.CommandListener):
 
 class MongoDB:
 
-	def __init__(self,using_replica_set: bool=False,using_sharded_cluster:bool = False,debug_level:int = INFO):
+	def __init__(self,using_replica_set: bool=False,using_sharded_cluster:bool = False,debug_level:int = INFO,debug_file_mode:str = "w"):
 		# Logging
 		self.logger = getLogger("MongoDB")
 		self.logger.setLevel(debug_level)
+
+		# Création de fichiers de logs
 		try:
 			# on crée le dossier  de logs s'il n'existe pas
 			makedirs("logs",exist_ok=True)
 
-			fh = FileHandler('logs/mongodb-tests.log')
-			formatter = Formatter(fmt="[%(levelname)s] %(filename)s:l.%(lineno)d - %(message)s")
+			fh 			= FileHandler('logs/mongodb-tests.log',mode=debug_file_mode)
+			formatter	= Formatter(fmt="[%(levelname)s] %(filename)s:l.%(lineno)d - %(message)s")
 			fh.setFormatter(formatter)
 			self.logger.addHandler(fh)
 
 			mongo_logger = getLogger('pymongo')
-			mongo_logger.setLevel(debug_level)
-			fh2 = FileHandler('logs/mongodb.log')
+			fh2 		 = FileHandler('logs/mongodb.log',mode=debug_file_mode)
 			fh2.setFormatter(formatter)
+			mongo_logger.setLevel(debug_level)
 			mongo_logger.addHandler(fh2)
 		
 		except Exception as e:
@@ -119,13 +122,13 @@ class MongoDB:
 			load_dotenv()
 			if using_replica_set:
 				replica_set = getenv('MONGO_REPLICA_SET',	'rs0')
-				mongo_host	= getenv('MONGO_REPLICA_HOST',	'localhost')
+				mongo_host	= getenv('MONGO_REPLICA_HOST',	'10.0.0.10')
 				mongo_port	= getenv('MONGO_REPLICA_PORT',	'27018')
 			elif using_sharded_cluster:
-				mongo_host	= getenv('MONGO_SHARD_HOST',	'localhost')
+				mongo_host	= getenv('MONGO_SHARD_HOST',	'10.0.10.10')
 				mongo_port	= getenv('MONGO_SHARD_PORT',	'27019')
 			else:
-				mongo_host	= getenv('MONGO_HOST',			'localhost')
+				mongo_host	= getenv('MONGO_HOST',			'127.0.0.1')
 				mongo_port	= getenv('MONGO_PORT',			'27017')
 
 			mongo_user	= getenv('MONGO_USER',		'')
@@ -134,7 +137,7 @@ class MongoDB:
 			collection	= getenv('MONGO_COLLECTION','test')
 
 		except Exception as e:
-			self.logger.error(f"MongoDB.__init__: {e}")
+			self.logger.error(f"MongoDB.__init__: error {e}")
 			raise Exception("MongoDB : Error loading environment variables")
 
 		# Connection to MongoDB
@@ -145,7 +148,8 @@ class MongoDB:
 											replicaSet=replica_set,
 											connect=True,
 											event_listeners=[CommandLogger()],
-											directConnection=True
+											retryWrites=True,  # Active les tentatives d'écriture automatiques
+											readPreference="primary"
 											#username=mongo_user,
 											#password=mongo_pass
 										)
@@ -154,13 +158,16 @@ class MongoDB:
 											int(mongo_port),
 											connect=True,
 											event_listeners=[CommandLogger()],
-											directConnection=True
+											#directConnection=True,
+											retryWrites=True,  # Active les tentatives d'écriture automatiques
+											readPreference="primaryPreferred"
 										)
 			else:
 				self.client	= MongoClient(	mongo_host,
 											int(mongo_port),
 											connect=True,
-											event_listeners=[CommandLogger()]
+											event_listeners=[CommandLogger()],
+											#directConnection=True
 											#username=mongo_user,
 											#password=mongo_pass
 										)
@@ -169,11 +176,12 @@ class MongoDB:
 			self.collection = self.db[collection]
 			self.client.server_info()
 			self.client.start_session()
-			self.logger.info("Connected to MongoDB")
-
+			self.logger.info(f"Connected to MongoDB {self.client.address[0]}:{self.client.address[1]}, Server Informations :")
+			for info in self.client.server_info():
+				self.logger.info(f"\t {info} : {self.client.server_info()[info]}")
 		except Exception as e:
-			self.logger.error(f"MongoDB.__init__: {e}")
-			raise Exception("MongoDB : Error connecting to database")
+			self.logger.error(f"MongoDB.__init__: error connecting to {mongo_host}:{mongo_port} -> {e}")
+			raise Exception(f"MongoDB : Error connecting to database {mongo_host}:{mongo_port} -> {e}")
 
 	def __del__(self):
 		try:
@@ -426,7 +434,11 @@ def violin_plot_operation_times(test_type="test",test_name=""):
 	# On va créer un graphique pour chaque opération, on affiche que l'opération courante
 	for operation in operation_times:
 
-		data = operation_times[operation]
+		if isinstance(operation_times[operation],list):
+			data = operation_times[operation]
+		else:
+			data = [operation_times[operation]]
+	
 
 		# Création d'un modèle de graphique
 		fig, ax = plt.subplots(figsize=(10, 6))
@@ -445,7 +457,7 @@ def violin_plot_operation_times(test_type="test",test_name=""):
 		q1		= percentile(data, 25)
 		q3		= percentile(data, 75)
 		median	= np_median(data)
-		mean	= mean(data)
+		mean	= np_mean(data)
 		
 
 		# Ajout du nuage de points 
@@ -476,11 +488,16 @@ def violin_plot_operation_times(test_type="test",test_name=""):
 		# Ajout des labels et du titre
 		ax.set_title(f"Temps mesuré pour réaliser l'opération: {operation}")
 		ax.set_ylabel("Temps (µs)")
-  
+
+		if path.exists(f"plots/MongoDB/{test_type}/{test_name}/{operation}.png"):
+			remove(f"plots/MongoDB/{test_type}/{test_name}/{operation}.png")
 		plt.savefig(f"plots/MongoDB/{test_type}/{test_name}/{operation}.png")
 
 		# On réinitialise le graphique
 		plt.clf()
+
+		# on ferme la figure
+		plt.close()	
 
 def plot_operation_times( data = dict,test_type="test",test_name=""):
 	"""
@@ -496,19 +513,25 @@ def plot_operation_times( data = dict,test_type="test",test_name=""):
 		# On récupère les données de temps en y et les données en x (quantité de données)
 		# data[operation] = [(nb_donnees,[liste des temps])]
 		nb_donnees	= [data[operation][i][0] for i in range(len(data[operation]))]
-		moyens		= [mean(data[operation][i][1]) for i in range(len(data[operation]))]
+		moyens		= [np_mean(data[operation][i][1]) for i in range(len(data[operation]))]
+
 		# On affiche le temps moyen en µs en fonction de la quantité de données
 		plt.plot(nb_donnees,moyens, label=f"{operation} : µs" )
-		plt.title("Temps moyen d'opération en fonction de la quantité de données")
+		plt.title(f"Temps moyen d'opération en fonction de la quantité de données")
 		plt.xlabel("Données dans la base de données")
 		plt.ylabel('Time (µs)')
 		plt.legend()
 
 		# On sauvegarde la figure
+		if path.exists(f"plots/MongoDB/{test_type}/{test_name}/{operation}.png"):
+			remove(f"plots/MongoDB/{test_type}/{test_name}/{operation}.png")
 		plt.savefig(f"plots/MongoDB/{test_type}/{test_name}/{operation}.png")
-
+	
 		# On réinitialise le graphique
 		plt.clf()
+  
+		# on ferme la figure
+		plt.close()
 	
 	if len(data) == 0:
 		print("No data to plot")
@@ -812,8 +835,7 @@ def test_many_various_data(mongo: MongoDB,plot_name :str, steps=arange(1000,num_
 
 def test_indexed(mongo: MongoDB,plot_name :str, test_function,**kwargs):
 	# On définit les index
-	indexes = [	IndexModel("id", unique=True), 
-				IndexModel("title"), 
+	indexes = [	IndexModel("title"), 
 				IndexModel("author"), 
 				IndexModel("published_date"), 
 				IndexModel("genre"), 
@@ -822,6 +844,13 @@ def test_indexed(mongo: MongoDB,plot_name :str, test_function,**kwargs):
 	mongo.logger.debug("Creating indexes...")
 	# On efface les index si existants
 	mongo.drop_indexes()
+ 
+	# On distingue id des autres index car id est utilisé pour le sharding
+	try:
+		index_id = mongo.create_index("id",unique=True)
+		mongo.create_index(index_id)
+	except Exception as e:
+		mongo.logger.error(f"Error creating indexes : {e}")
 	# On crée les index
 	mongo.create_indexes(indexes)
 	
@@ -889,18 +918,21 @@ def run_tests(mongo: MongoDB, type_test:str, steps=arange(1000,num_records,num_r
 
 
 def print_progress(total,text="Running tests..."):
-	global operations_done, operation_Event	
+	global operations_done, operation_Event, operation_lock
  
-	with alive_bar(total) as bar:
+	with alive_bar(total=total,manual=True) as bar:
 		bar.text(text)
 		print_progress.run = True
 		# Attendre operation_Event
 		while operations_done < total and print_progress.run:
 			operation_Event.wait()
 			operation_Event.clear()
-			bar()
+			with operation_lock:
+				percent = operations_done/total
+			bar(percent)
 			bar.text(print_progress.text)
 
+		bar(1.)
 		bar.text(f"Operations done !")
 print_progress.run		= True
 print_progress.text		="Running tests..."
@@ -909,7 +941,7 @@ print_progress.text		="Running tests..."
 if __name__ == "__main__":
 
 	# On affiche les informations système
-	print_system_info()
+	#print_system_info()
 
 	# On charge la configuration
 	get_configuration()
@@ -928,8 +960,10 @@ if __name__ == "__main__":
 		#parser.error("No action requested, add --standalone, --replica, --sharded or --all")
 		args.all = True
 
-	steps	= arange(1000,num_records,num_records/100)
-	size 	= len(steps)
+	# On part avec O données initiales et on veut 100 mesures intermédiaires jusqu'à num_records
+	# On aura donc un besoin d'un pas de (num_records - 0)/nb_measurements
+	steps	= arange(0,num_records,num_records/nb_measurements)
+	size 	= len(steps) # Nombre de mesures intermédiaires : nb_measurements
  
 	# Calcul le nombre total d'opérations à effectuer pour l'affichage de la progression pour une instance de test
 	# 2* à chaque fois car test avec et sans index, 4 fois car 4 tests
@@ -957,24 +991,27 @@ if __name__ == "__main__":
 	progress_T = Thread(target=print_progress, args=((total,)) )
 	progress_T.start()
 	
-	errors = ""
-	debug_level = DEBUG if args.verbose else INFO
-	mongo_standalone	= None
-	mongo_replica		= None
-	mongo_sharded		= None
+	# On crée les instances de MongoDB
+	mongo_standalone, mongo_replica, mongo_sharded =  None, None, None
 	
+	# On définit le niveau de log
+	debug_level = DEBUG if args.verbose else INFO
+	# On définit le mode d'écriture du fichier de log selon les tests à effectués (on se base sur le coeff)
+	alone_dbg_mode, replica_dbg_mode, sharded_dbg_mode = "w", "w", "w"
+	if coeff >= 2:
+		sharded_dbg_mode = "a+"
+		replica_dbg_mode = "a+" if args.standalone else "w"
+  
 	if args.standalone or args.all:
 		try:
 
-			mongo_standalone = MongoDB(debug_level=debug_level)
+			mongo_standalone = MongoDB(debug_level=debug_level,debug_file_mode=alone_dbg_mode)
 			print_progress.text = "Tests en mode standalone..."
 			run_tests(mongo_standalone, "standalone" ,steps=steps)
 
 		except Exception as e:
-
 			print(f"Erreur avec le test en standalone: {e}")
-			errors += f"Erreur avec le test en standalone: {e}\n"
-
+   
 		finally:
 			if mongo_standalone is not None:
 				del mongo_standalone
@@ -982,14 +1019,14 @@ if __name__ == "__main__":
 	if args.replica or args.all:
 		try:
 
-			mongo_replica = MongoDB(using_replica_set=True,debug_level=debug_level)
+			mongo_replica = MongoDB(using_replica_set=True,debug_level=debug_level,debug_file_mode=alone_dbg_mode)
 			print_progress.text = "Tests en mode Replica..."
 			run_tests(mongo_replica, "replica_set", steps=steps)
 
 		except Exception as e:
 
 			print(f"Erreur avec le test avec Replica Set: {e}")
-			errors += f"Erreur avec le test avec Replica Set: {e}\n"
+
 		finally:
 
 			if mongo_replica is not None:
@@ -998,14 +1035,13 @@ if __name__ == "__main__":
 	if args.sharded or args.all:
 		try:
 
-			mongo_sharded = MongoDB(using_sharded_cluster=True,debug_level=debug_level)
+			mongo_sharded = MongoDB(using_sharded_cluster=True,debug_level=debug_level,debug_file_mode=alone_dbg_mode)
 			print_progress.text = "Tests en mode Sharded..."
 			run_tests(mongo_sharded, "sharding", steps=steps)
 
 		except Exception as e:
 
 			print(f"Erreur avec le test avec Shards: {e}")
-			errors += f"Erreur avec le test avec Shards: {e}\n"
 
 		finally:
 			if mongo_sharded is not None:
@@ -1014,7 +1050,6 @@ if __name__ == "__main__":
 	# On finit le thread de progressions
 	print_progress.run = False
 	operation_Event.set()
-	progress_T.join(timeout=1)
+	progress_T.join(timeout=3)
 	
-	print("End of tests")
-	print(errors)
+	print("End of tests !")

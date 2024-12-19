@@ -23,16 +23,17 @@ Collection/Table "Books" :
 
 # Générateur de données
 faker = Faker("fr_FR")
-faker.seed_instance(1234)
 
-random_seed(1234)
 
 
 # Configuration
 num_records				= 10000
 num_records_per_many	= 10
+nb_measurements			= 100
 generated_file			= "generated-data/books.json"
 updated_file			= "generated-data/updated_books.json"
+seed_generation			= 1234
+seed_update				= 9876
 
 
 # Genres de livres disponibles
@@ -46,15 +47,18 @@ class Book:
 	genre: str					= genres[0]
 	price: float				= 1.0
 	copies_sold: int			= 0
-	ran: int					= 0
-	
- 
+	ran: int					= 0	
+
+
+
 def get_configuration():
 	"""
 	Get the configuration of the database
 	"""
-	global num_records, num_records_per_many, generated_file, updated_file
-	
+	global num_records, num_records_per_many, nb_measurements
+	global generated_file, updated_file
+	global faker, seed_generation, seed_update
+ 
 	if get_configuration.loaded:
 		return
  
@@ -66,18 +70,27 @@ def get_configuration():
 	# Nombre de livres à générer
 	num_records				 = int(getenv("NUM_RECORDS", 10000))
 	num_records_per_many	 = int(getenv("NUM_RECORDS_PER_MANY", 10))
+	nb_measurements			 = int(getenv("NB_MEASUREMENTS", 100))
 	generated_file			 = getenv("GENERATED_FILE_PATH", "generated-data/books.json")
 	updated_file			 = getenv("UPDATED_FILE_PATH", "generated-data/updated_books.json")
-	get_configuration.loaded = True
+	seed_generation			 = int(getenv("SEED_GENARATION", 1234))
+	seed_update				 = int(getenv("SEED_UPDATE", 9876))
+	get_configuration.loaded = True	
 get_configuration.loaded = False
 
+# Récupérer la configuration
+get_configuration()
 
 def generate_book(id=-1) -> dict:
 	global faker, genres,num_records_per_many
 	if id == -1:
 		generate_book.id += 1
 		id = generate_book.id
-	
+
+	# On fixe la graine pour les données générées
+	faker.seed_instance(seed_generation)
+	random_seed(seed_generation)
+
 	return {
 		"id":				id,
 		"title":			faker.sentence(nb_words=randint(1, 6)),
@@ -89,7 +102,7 @@ def generate_book(id=-1) -> dict:
 		"ran":				randint(0, num_records_per_many-1)
 	}
 generate_book.id = -1
- 
+
 def generate_dataset(num_records):
  
 	books = []
@@ -166,7 +179,10 @@ def extract_updated_books_from_file(file, max_data:int = num_records):
 def modify_book(book:dict) -> dict:
 	global  genres
 	update_faker = Faker("fr_FR")
-	update_faker.seed_instance(9876)
+	
+	# On fixe la graine pour les données modifiées
+	update_faker.seed_instance(seed_update)
+	random_seed(seed_update)
  
 	# On modifie un champ aléatoire
 	
@@ -219,15 +235,12 @@ def update_dataset(dataset):
 			dataset[i]	= {"original": original, "modified": modified}
 			bar()
 
-
 def save_to_file(data, filename):
 	with open(filename, "w",encoding='utf8') as f:
 		json.dump(data, f,indent=4, ensure_ascii=False)
 
 
 if __name__ == "__main__":
-	# Récupérer la configuration
-	get_configuration()
 
 	# Générer les données
 	dataset=generate_dataset(num_records)
@@ -237,7 +250,7 @@ if __name__ == "__main__":
 
 	# Génération des données à modifier
 	# On génère de nouvelles graines pour les données modifiées
-	random_seed(9876)
+	#random_seed(9876)
 	update_dataset(dataset)
  
 	# Enregistrer les données dans un fichier

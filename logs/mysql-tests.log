@@ -1,1 +1,3 @@
-
+[INFO] mysql.py:131 - MySQL object created
+[INFO] mysql.py:659 - Test global one by one single_instance
+on 0: [WARNING] mysql.py:668 - Gathered 10000 records instead of 20000

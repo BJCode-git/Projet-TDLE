@@ -13,11 +13,11 @@ services:
       #env_file:
       #  - .env
       environment:
-        MYSQL_ROOT_PASSWORD: "root"
+        MYSQL_ROOT_PASSWORD:        ${MYSQL_PASSWORD}
         MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
-        MYSQL_PASSWORD:      ${MYSQL_PASSWORD}
-        MYSQL_DATABASE:     "test"
-        MYSQL_USER:         "admin"
+        MYSQL_PASSWORD:             ${MYSQL_PASSWORD}
+        MYSQL_DATABASE:             ${MYSQL_DATABASE}
+        MYSQL_USER:                 ${MYSQL_USER}
 
 
   ### End Standalone ###
@@ -28,9 +28,23 @@ services:
       container_name: 'mysql-replica1'
       hostname: 'mysql-replica1'
       image: 'mysql:latest'
-      command: --default-authentication-plugin=mysql_native_password --port=3316
+      command: >
+        --server-id=1 
+        --port=3316
+      #--log-bin=/var/log/mysql/mysql-bin.log
+      #--gtid-mode=ON
+      #--enforce-gtid-consistency=ON
+      healthcheck:
+        test: ["CMD","mysqladmin", "ping", "-h", "localhost"]
+        interval: 10s
+        timeout: 5s
+        retries: 3
+        start_period: 5s
       ports:
         - 3316:3316
+      networks:
+        mysql-replica-network:
+          ipv4_address: 192.168.10.10
       volumes:
         - mysql-master-data:/var/lib/mysql
       env_file:
@@ -40,18 +54,29 @@ services:
         MYSQL_PASSWORD:      ${MYSQL_PASSWORD}
         MYSQL_DATABASE:      ${MYSQL_DATABASE}
         MYSQL_USER:          ${MYSQL_USER}
+      restart: on-failure
 
     mysql-replica2:
       container_name: 'mysql-replica2'
       hostname: 'mysql-replica2'
       image: 'mysql:latest'
-      command: --default-authentication-plugin=mysql_native_password
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
+      command: >
+        --server-id=2
+        --port=3317
+        --relay-log=/var/log/mysql/mysql-relay-bin.log
+      healthcheck:
+        test: ["CMD","mysqladmin", "ping", "-h", "localhost"]
+        interval: 10s
+        timeout: 5s
+        retries: 3
+        start_period: 5s
+      networks:
+        mysql-replica-network:
+          ipv4_address: 192.168.10.11
       ports:
         - 3317:3317
       volumes:
-        - mysql-slave1-data:/var/lib/mysql
+        - mysql-replica1-data:/var/lib/mysql
       env_file:
         - .env
       environment:
@@ -59,18 +84,30 @@ services:
         MYSQL_PASSWORD:      ${MYSQL_PASSWORD}
         MYSQL_DATABASE:      ${MYSQL_DATABASE}
         MYSQL_USER:          ${MYSQL_USER}
+      restart: on-failure
 
     mysql-replica3:
       container_name: 'mysql-replica3'
       hostname: 'mysql-replica3'
       image: 'mysql:latest'
-      command: --default-authentication-plugin=mysql_native_password --port=3318
-      extra_hosts:
-      - "host.docker.internal:host-gateway"
+      command: >
+        --server-id=3 
+        --port=3318
+        --relay-log=/var/log/mysql/mysql-relay-bin.log
+        
+      healthcheck:
+        test: ["CMD","mysqladmin", "ping", "-h", "localhost"]
+        interval: 10s
+        timeout: 5s
+        retries: 3
+        start_period: 5s
+      networks:
+        mysql-replica-network:
+          ipv4_address: 192.168.10.12
       ports:
         - 3318:3318
       volumes:
-        - mysql-slave1-data:/var/lib/mysql
+        - mysql-replica2-data:/var/lib/mysql
       env_file:
         - .env
       environment:
@@ -78,19 +115,49 @@ services:
         MYSQL_PASSWORD:      ${MYSQL_PASSWORD}
         MYSQL_DATABASE:      ${MYSQL_DATABASE}
         MYSQL_USER:          ${MYSQL_USER}
+      restart: on-failure
       
     ### Initiate Replication ###
     mysql-replica-initiate:
       image: mysql:latest
       container_name: 'mysql-replica-initiate'
       entrypoint: >
-        bash -c '
-          mysql -u root -p${MYSQL_PASSWORD} -e "CHANGE MASTER TO MASTER_HOST=\"mysql-replica1\", MASTER_USER=\"${MYSQL_USER}\", MASTER_PASSWORD=\"${MYSQL_PASSWORD}\", MASTER_AUTO_POSITION=1; START SLAVE;"'
+       bash -c "
+        echo 'Configuration de l'utilisateur de réplication' &&
+        mysql -h 192.168.10.10 -P 3316 -u root -p${MYSQL_PASSWORD} -e \"
+          GRANT REPLICATION SLAVE ON *.* TO '192.168.10.11'@'%';
+          GRANT REPLICATION SLAVE ON *.* TO '192.168.10.12'@'%';
+          FLUSH PRIVILEGES;
+        \"
+        echo 'Initialisation de la réplication du replica2' &&
+        mysql -h 192.168.10.11 -P 3317 -u root -p${MYSQL_PASSWORD} -e \"
+          CHANGE MASTER TO MASTER_HOST='192.168.10.10',
+          MASTER_USER='replica_user',
+          MASTER_PASSWORD='replica_password',
+          MASTER_AUTO_POSITION=1;
+          START SLAVE;
+        \"
+        mysql -h 192.168.10.12 -P 3318 -u root -p${MYSQL_PASSWORD} -e \"
+          CHANGE MASTER TO MASTER_HOST='192.168.10.10',
+          MASTER_USER='replica_user',
+          MASTER_PASSWORD='replica_password',
+          MASTER_AUTO_POSITION=1;
+          START SLAVE;
+        \"
+        echo 'Réplicas initialisés' &&
+        sleep infinity
+        "
+
       depends_on:
-        - mysql-replica1
-        - mysql-replica2
-        - mysql-replica3
-      restart: on-failure
+        mysql-replica1:
+          condition: service_healthy
+        mysql-replica2:
+          condition: service_healthy
+        mysql-replica3:
+          condition: service_healthy
+      networks:
+        mysql-replica-network:
+          ipv4_address: 192.168.10.13
       env_file:
         - .env
       environment:
@@ -98,6 +165,7 @@ services:
         MYSQL_PASSWORD:      ${MYSQL_PASSWORD}
         MYSQL_DATABASE:      ${MYSQL_DATABASE}
         MYSQL_USER:          ${MYSQL_USER}
+      restart: on-failure
   
     ### End Initiate Replication ###
 
@@ -108,7 +176,7 @@ services:
     mysql-manager: 
       container_name: 'mysql-manager'
       hostname: 'mysql-manager'
-      image: 'mysql/mysql-cluster:8.0'
+      image: 'mysql/mysql-cluster:latest'
       command : ndb_mgmd  --ndb-nodeid=1 #--reload --config-dir=/etc/ --config-file=/etc/mysql-cluster.cnf
       networks:
         mysql-network :
@@ -122,7 +190,7 @@ services:
 
     mysql-ndbd1:
       container_name: 'mysql-ndbd1'
-      image: 'mysql/mysql-cluster:8.0'
+      image: 'mysql/mysql-cluster:latest'
       command : ndbd 
       networks:
          mysql-network :
@@ -136,7 +204,7 @@ services:
 
     mysql-ndbd2:
       container_name: 'mysql-ndbd2'
-      image: 'mysql/mysql-cluster:8.0'
+      image: 'mysql/mysql-cluster:latest'
       command : ndbd 
       networks:
               mysql-network :
@@ -150,7 +218,7 @@ services:
 
     mysql-node1:
       container_name: 'mysql-node1'
-      image: 'mysql/mysql-cluster:8.0'
+      image: 'mysql/mysql-cluster:latest'
       command : mysqld --default-authentication-plugin=mysql_native_password #--ndb-nodeid=4 --ndb-connectstring=mysql-manager:1186 --bind-address=0.0.0.0 #:3329
       ports:
         - 3329:3306
@@ -174,7 +242,7 @@ services:
 
 
     mysql-sharded-initiate:
-      image: mysql/mysql-cluster:8.0
+      image: mysql/mysql-cluster:latest
       container_name: 'mysql-sharded-initiate'
       networks:
         - mysql-network
@@ -191,10 +259,8 @@ services:
               genre VARCHAR(100),
               price FLOAT,
               copies_sold INT NOT NULL,
-              rand INT
-          )" 
-
-
+              rand INT NOT NULL
+          )" &&
           exit 0'
       depends_on:
         mysql-manager:
@@ -214,6 +280,12 @@ services:
       hostname: 'mongo-standalone'
       image: 'mongo:latest'
       command: mongod --bind_ip_all --port 27017
+      healthcheck:
+        test: ["CMD","mongosh", "--port","27017", "--eval", "db.adminCommand('ping')"]
+        interval: 10s
+        timeout: 5s
+        retries: 3
+        start_period: 5s
       ports:
         - 27017:27017
       volumes:
@@ -232,10 +304,19 @@ services:
       hostname: 'mongo-replica1'
       image: mongo:latest
       command: mongod --replSet "rs0" --bind_ip_all --port 27018
+      healthcheck:
+        test: ["CMD","mongosh", "--port","27018", "--eval", "db.adminCommand('ping')"]
+        interval: 10s
+        timeout: 5s
+        retries: 3
+        start_period: 5s
       ports:
         - 27018:27018
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
+      networks:
+        mongo-replica-network :
+            ipv4_address: 10.0.0.10
+      #extra_hosts:
+      #  - "host.docker.internal:host-gateway"
       volumes:
         - "mongo-replica1_data:/data/db"
         - "mongo-replica1_config:/data/configdb"
@@ -250,8 +331,11 @@ services:
       command: mongod --replSet "rs0" --bind_ip_all --port 27019
       ports:
         - 27019:27019
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
+      networks:
+        mongo-replica-network :
+            ipv4_address: 10.0.0.2
+      #extra_hosts:
+      #  - "host.docker.internal:host-gateway"
       volumes:
         - "mongo-replica2_data:/data/db"
         - "mongo-replica2_config:/data/configdb"
@@ -266,8 +350,11 @@ services:
       command: mongod --replSet "rs0" --bind_ip_all --port 27020
       ports:
         - 27020:27020
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
+      networks:
+        mongo-replica-network :
+            ipv4_address: 10.0.0.3
+      #extra_hosts:
+      #  - "host.docker.internal:host-gateway"
       volumes:
         - "mongo-replica3_data:/data/db"
         - "mongo-replica3_config:/data/configdb"
@@ -280,23 +367,28 @@ services:
       hostname: 'mongo-replica-initiate'
       entrypoint: >
         bash -c '
-          sleep 10 &&
           mongosh --host mongo-replica1:27018 --eval "
           rs.initiate({
             _id: \"rs0\",
             members:  [
-                        {_id: 0, host: \"mongo-replica1:27018\", priority: 1},
-                        {_id: 1, host: \"mongo-replica2:27019\", priority: 0.1},
-                        {_id: 2, host: \"mongo-replica3:27020\", priority: 0.1}
+                        {_id: 0, host: \"10.0.0.10:27018\", priority: 1},
+                        {_id: 1, host: \"10.0.0.2:27019\", priority: 0.1},
+                        {_id: 2, host: \"10.0.0.3:27020\", priority: 0.1}
                       ]
           })"&&
           exit 0'
       depends_on:
-        - mongo-replica1
-        - mongo-replica2
-        - mongo-replica3
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
+        mongo-replica1:
+          condition : service_healthy
+        mongo-replica2:
+          condition : service_started
+        mongo-replica3:
+          condition : service_started
+      networks:
+        mongo-replica-network :
+            ipv4_address: 10.0.0.4
+      #extra_hosts:
+      #  - "host.docker.internal:host-gateway"
       restart: on-failure
       
       ### End Initiate Replica Set ###
@@ -312,12 +404,21 @@ services:
       hostname: configserver1
       image: mongo:latest
       command: mongod --configsvr --replSet configserver  --dbpath /data/db --port 27110 --bind_ip_all
+      healthcheck:
+        test: ["CMD","mongosh", "--port","27110", "--eval", "db.adminCommand('ping')"]
+        interval: 10s
+        timeout: 5s
+        retries: 3
+        start_period: 5s
       ports:
         - 27110:27110
       volumes:
         - configserver1:/data/db
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
+      networks:
+        mongo-shard-network :
+            ipv4_address: 10.0.10.101
+      #extra_hosts:
+      #  - "host.docker.internal:host-gateway"
 
     configserver2:
       container_name: configserver2
@@ -328,8 +429,11 @@ services:
         - 27111:27111
       volumes:
         - configserver2:/data/db
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
+      #extra_hosts:
+      #  - "host.docker.internal:host-gateway"
+      networks:
+        mongo-shard-network :
+            ipv4_address: 10.0.10.102
 
     configserver3:
       container_name: configserver3
@@ -340,37 +444,50 @@ services:
         - 27112:27112
       volumes:
         - configserver3:/data/db
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
+      networks:
+        mongo-shard-network :
+            ipv4_address: 10.0.10.103
+      #extra_hosts:
+      #  - "host.docker.internal:host-gateway"
 
     mongo-config-server-init:
       container_name: mongo-config-server-init
       hostname: mongo-config-server-init
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
+      #extra_hosts:
+      #  - "host.docker.internal:host-gateway"
       image: mongo:latest
       depends_on:
-        - configserver1
-        - configserver2
-        - configserver3
+        configserver1:
+          condition : service_healthy
+        configserver2:
+          condition : service_started
+        configserver3:
+          condition : service_started
       command: >
         bash -c '
+        state="0";
         echo "on initialise les config servers" &&
-        sleep 10 &&
-        mongosh configserver1:27110 --eval "rs.initiate(
-          {
-            _id: \"configserver\",
-            configsvr: true,
-            members: [
-              { _id : 0, host : \"configserver1:27110\" },
-              { _id : 1, host : \"configserver2:27111\" },
-              { _id : 2, host : \"configserver3:27112\" }
-            ]
-          }
-        )" &&
-        exit 0'
-      #extra_hosts:
-#        - "host.docker.internal:host-gateway"
+        state=$(mongosh configserver1:27110 --quiet --eval "rs.status().ok" || echo 0);
+        if [ "$state" != "1" ]; then
+          mongosh configserver1:27110 --eval "rs.initiate(
+            {
+              _id: \"configserver\",
+              configsvr: true,
+              members: [
+                { _id : 0, host : \"10.0.10.101:27110\" },
+                { _id : 1, host : \"10.0.10.102:27111\" },
+                { _id : 2, host : \"10.0.10.103:27112\" }
+              ]
+            }
+          )" &&
+          exit 0;
+        else
+          echo "Le replica set pour les config servers est déjà initialisé.";
+          exit 0;
+        fi'
+      networks:
+        mongo-shard-network:
+            ipv4_address : 10.0.10.104
       restart: on-failure
 
   ### End Config Server ###
@@ -386,8 +503,11 @@ services:
         - 27117:27117
       volumes:
         - shardsvr1_1:/data/db
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
+      networks:
+        mongo-shard-network :
+            ipv4_address: 10.0.10.11
+      #extra_hosts:
+      #  - "host.docker.internal:host-gateway"
 
     shardsvr1_2:
       container_name: shardsvr1_2
@@ -398,8 +518,11 @@ services:
         - 27118:27118
       volumes:
         - shardsvr1_2:/data/db
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
+      networks:
+        mongo-shard-network :
+            ipv4_address: 10.0.10.12
+      #extra_hosts:
+      #  - "host.docker.internal:host-gateway"
 
     shardsvr1_3:
       container_name: shardsvr1_3
@@ -410,37 +533,48 @@ services:
         - 27119:27119
       volumes:
         - shardsvr1_3:/data/db
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
+      networks:
+        mongo-shard-network :
+            ipv4_address: 10.0.10.13
+      #extra_hosts:
+      #  - "host.docker.internal:host-gateway"
 
     mongo-shard1-initiate:
       container_name: mongo-shard1-initiate
       hostname: mongo-shard1-initiate
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
       image: mongo:latest
       depends_on:
         shardsvr1_1:
           condition : service_started
         shardsvr1_2:
           condition : service_started
-        shardsvr1_3:
-          condition : service_started
+        #shardsvr1_3:
+        #  condition : service_started
       command: >
         bash -c '
+        state="0";
         echo "on initialise le shard 1 " &&
-        mongosh shardsvr1_1:27117 --eval "rs.initiate(
-          {
-            _id: \"shard1_rs\",
-            members: [
-              { _id : 0, host : \"shardsvr1_1:27117\" },
-              { _id : 1, host : \"shardsvr1_2:27118\" },
-              { _id : 2, host : \"shardsvr1_3:27119\" }
-            ]
-          }
-        )"'
+        state=$(mongosh shardsvr1_1:27117 --quiet --eval "rs.status().ok" || echo 0);
+        if [ "$state" != "1" ]; then
+          mongosh shardsvr1_1:27117 --eval "rs.initiate(
+            {
+              _id: \"shard1_rs\",
+              members: [
+                { _id : 0, host : \"10.0.10.11:27117\" },
+                { _id : 1, host : \"10.0.10.12:27118\" }
+              ]
+            }
+          )" &&
+          exit 0;
+        else
+          echo "Le replica set pour shard 1 est déjà initialisé.";
+          exit 0;
+        fi'
       #extra_hosts:
-#        - "host.docker.internal:host-gateway"
+#        - "host.docker.internal:host-gateway" 
+      networks:
+        mongo-shard-network:
+            ipv4_address : 10.0.10.14
       restart: on-failure
 
   ### End Shard 2 ###
@@ -456,8 +590,11 @@ services:
         - 27217:27217
       volumes:
         - shardsvr2_1:/data/db
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
+      networks:
+        mongo-shard-network :
+            ipv4_address: 10.0.10.21
+      #extra_hosts:
+      #  - "host.docker.internal:host-gateway"
 
     shardsvr2_2:
       container_name: shardsvr2_2
@@ -468,8 +605,11 @@ services:
         - 27218:27218
       volumes:
         - shardsvr2_2:/data/db
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
+      networks:
+        mongo-shard-network :
+            ipv4_address: 10.0.10.22
+      #extra_hosts:
+      #  - "host.docker.internal:host-gateway"
         
     shardsvr2_3:
       container_name: shardsvr2_3
@@ -480,34 +620,45 @@ services:
         - 27219:27219
       volumes:
         - shardsvr2_3:/data/db
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
+      networks:
+        mongo-shard-network :
+            ipv4_address: 10.0.10.23
+      #extra_hosts:
+      #  - "host.docker.internal:host-gateway"
 
     mongo-shard2-initiate:
       container_name: mongo-shard2-initiate
       hostname: mongo-shard2-initiate
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
       image: mongo:latest
       depends_on:
         - shardsvr2_1
         - shardsvr2_2
-        - shardsvr2_3
+        #- shardsvr2_3
       command: >
         bash -c '
+        state="0";
         echo "on initialise le shard 2" &&
-        mongosh shardsvr2_1:27217 --eval "rs.initiate(
-          {
-            _id: \"shard2_rs\",
-            members: [
-              { _id : 0, host : \"shardsvr2_1:27217\" },
-              { _id : 1, host : \"shardsvr2_2:27218\" },
-              { _id : 2, host : \"shardsvr2_3:27219\" }
-            ]
-          }
-        )"'
+        state=$(mongosh shardsvr2_1:27217 --quiet --eval "rs.status().ok" || echo 0);
+        if [ "$state" != "1" ]; then
+          mongosh shardsvr2_1:27217 --eval "rs.initiate(
+            {
+              _id: \"shard2_rs\",
+              members: [
+                { _id : 0, host : \"10.0.10.21:27217\" },
+                { _id : 1, host : \"10.0.10.22:27218\" }
+              ]
+            }
+          )" &&
+          exit 0;
+        else
+          echo "Le replica set pour shard 2 est déjà initialisé.";
+          exit 0;
+        fi;'
+      networks:
+        mongo-shard-network:
+            ipv4_address : 10.0.10.24
       #extra_hosts:
-#        - "host.docker.internal:host-gateway"
+      # - "host.docker.internal:host-gateway"
       restart: on-failure
         
   ### End Shard 2 ###
@@ -518,7 +669,13 @@ services:
       container_name: mongo-router
       hostname: mongo-router
       image: mongo:latest
-      command: mongos --configdb configserver/configserver1:27110,configserver2:27111,configserver3:27112 --bind_ip_all --port 27115
+      command: mongos --configdb configserver/10.0.10.101:27110,10.0.10.102:27111,10.0.10.103:27112 --bind_ip_all --port 27115 
+      healthcheck:
+        test: ["CMD","mongosh", "--port","27115", "--eval", "db.adminCommand('ping')"]
+        interval: 10s
+        timeout: 5s
+        retries: 3
+        start_period: 5s
       depends_on:
         mongo-config-server-init :
             condition: service_completed_successfully
@@ -528,10 +685,13 @@ services:
             condition: service_completed_successfully
       ports:
         - 27115:27115
+      networks:
+        mongo-shard-network :
+            ipv4_address: 10.0.10.10
       volumes:
         - mongo-router:/data
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
+      #extra_hosts:
+      #  - "host.docker.internal:host-gateway"
 
   ### End Router ###
 
@@ -543,19 +703,23 @@ services:
       command: >
         bash -c '
         echo "on configure le router pour le shard 1" &&
-        mongosh mongo-router:27115 --eval "sh.addShard(\"shard1_rs/shardsvr1_1:27117,shardsvr1_2:27118,shardsvr1_3:27119\")" &&
+        mongosh 10.0.10.10:27115 --eval "sh.addShard(\"shard1_rs/10.0.10.11:27117,10.0.10.12:27118\")" &&
         echo "on configure le router pour le shard 2" &&
-        mongosh mongo-router:27115 --eval "sh.addShard(\"shard2_rs/shardsvr2_1:27217,shardsvr2_2:27218,shardsvr2_3:27219\")" &&
+        mongosh 10.0.10.10:27115 --eval "sh.addShard(\"shard2_rs/10.0.10.21:27217,10.0.10.22:27218\")" &&
         echo "on crée la base de données test si elle n existe pas" &&
-        mongosh mongo-router:27115 --eval "db.getSiblingDB(\"test\").createCollection(\"test\")" &&
+        mongosh 10.0.10.10:27115 --eval "db.getSiblingDB(\"test\").createCollection(\"test\")" &&
         echo "on active le sharding sur la base de données test" &&
-        mongosh mongo-router:27115 --eval "sh.enableSharding(\"test\")" &&
-        mongosh mongo-router:27115 --eval "sh.shardCollection(\"test.test\", { _id: \"hashed\" })" &&
-        mongosh mongo-router:27115 --eval "sh.status()"'
+        mongosh 10.0.10.10:27115 --eval "sh.enableSharding(\"test\")" &&
+        mongosh 10.0.10.10:27115 --eval "sh.shardCollection(\"test.test\", { _id: \"hashed\" })" &&
+        mongosh 10.0.10.10:27115 --eval "sh.status()"'
       depends_on:
-        - mongo-router
-      extra_hosts: 
-        - "host.docker.internal:host-gateway"
+        mongo-router:
+          condition: service_healthy
+      networks:
+        mongo-shard-network:
+            ipv4_address : 10.0.10.3
+      #extra_hosts: 
+      #  - "host.docker.internal:host-gateway"
       restart: on-failure
 
 ### End Mongo Shards ###
@@ -585,13 +749,12 @@ services:
       command: echo "MongoDB is started !"
       depends_on:
         mongo-standalone :
-          condition: service_started
+          condition: service_healthy
         mongo-replica-initiate :
           condition: service_completed_successfully
         mongo-sharded-cluster :
           condition: service_completed_successfully
         
-
 
     test-mongo:
       image: python:latest
@@ -602,7 +765,7 @@ services:
         generate-data:
           condition: service_completed_successfully
         mongo-standalone :
-          condition: service_started
+          condition: service_healthy
         mongo-replica-initiate :
           condition: service_completed_successfully
         mongo-sharded-cluster :
@@ -667,7 +830,7 @@ services:
           condition: service_completed_successfully
       command: >
         bash -c '
-        echo "Test effectués avec succès !"'
+        echo "Tests effectués avec succès !"'
       
     
 
@@ -686,7 +849,8 @@ volumes:
 
   # MySQL Replication
   mysql-master-data:
-  mysql-slave1-data:
+  mysql-replica1-data:
+  mysql-replica2-data:
 
   # MySQL Cluster
   mysql-cluster-data:
@@ -725,9 +889,27 @@ volumes:
 
   
 networks:
-  # Sous réseau pour les tests : 192.168.0.0/16
+
+  mysql-replica-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.10.0/24
+
   mysql-network:
     driver: bridge
     ipam:
       config:
         - subnet: 192.168.0.0/24
+
+  mongo-replica-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.0.0/24
+  
+  mongo-shard-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.10.0/24

@@ -5,3 +5,5 @@ __pycache__/*
 .vscode/
 docker-compose-old.yml
 test.py
+scripts/
+scripts/*

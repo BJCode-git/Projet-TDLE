@@ -1,5 +1,5 @@
 
-from os import getenv, makedirs
+from os import getenv, makedirs, path, remove
 from dotenv import load_dotenv
 from argparse import ArgumentParser
 
@@ -7,13 +7,14 @@ import pymysql
 from time import perf_counter_ns as time_ns
 
 # For statistics
-from numpy import arange, median as np_median, mean, percentile
+from numpy import arange, median as np_median, mean as np_mean, percentile
 from numpy.random import normal
 
 # For generating data and handling data
-from generate_data import extract_books_from_file, extract_updated_books_from_file
-from generate_data import generate_book,Book , modify_book 
-from generate_data import num_records, num_records_per_many, generated_file, updated_file, get_configuration
+from generate_data import extract_books_from_file, extract_updated_books_from_file ,generated_file, updated_file
+from generate_data import generate_book, modify_book #, Book 
+from generate_data import num_records, num_records_per_many, nb_measurements
+from generate_data import  get_configuration
 
 # for graphing
 import matplotlib.pyplot as plt
@@ -47,16 +48,17 @@ def add_operation_time(operation, time):
 	Add the time of an operation
 	"""
 	global operation_times
+	# Convert nanoseconds time to microseconds
+	time = time/1000
 	if operation not in operation_times:
 		operation_times[operation] = [time]
-	operation_times[operation].append[time]
+	operation_times[operation].append(time)
 
 class MySQL:
 
-	def __init__(self, using_replica=False, using_shard=False,debug_level=INFO):
+	def __init__(self, using_replica=False, using_shard=False,debug_level=INFO,dbg_file_mode="w"):
 		
 		self.connection = None
-		#self.cursor 	= None
 		self.db 		= None
 		self.host 		= None
 		self.user 		= None
@@ -65,13 +67,10 @@ class MySQL:
 		self.logger		= getLogger("MySQL")
 		self.logger.setLevel(debug_level)
 		try:
-			f = Formatter(fmt='[%(levelname)s] %(filename)s:%(lineno)d - %(message)s')
-			fh = FileHandler("logs/mysql-tests.log")
+			f 	= Formatter(fmt='[%(levelname)s] %(filename)s:%(lineno)d - %(message)s')
+			fh 	= FileHandler("logs/mysql-tests.log",mode=dbg_file_mode)
 			fh.setFormatter(f)
 			self.logger.addHandler(fh)
-	
-			getLogger("pymysql").setLevel(debug_level)
-			getLogger("pymysql").addHandler(FileHandler("logs/mysql.log"))
 
 		except Exception as e:
 			self.logger.error("Error creating log file", e)
@@ -86,7 +85,7 @@ class MySQL:
 				self.host = getenv("MYSQL_HOST", "localhost")
 
 			self.user 		= getenv("MYSQL_USER", "root")
-			self.db 		= getenv("MYSQL_DB", "MYSQL_DATABASE")
+			self.db 		= getenv("MYSQL_DATABASE", "test")
 			self.password 	= getenv("MYSQL_PASSWORD", "")
 			self.port 		= int(getenv("MYSQL_PORT", 3306))
 
@@ -98,13 +97,36 @@ class MySQL:
 			self.connection = pymysql.connect(
 				host=self.host,
 				user=self.user,
+				database=self.db,
 				password=self.password,
 				port=self.port,
-				autocommit=True
+				autocommit=True,
 			)
+
+			# Création de la table si elle n'existe pas
+			with self.connection.cursor() as cursor:
+				cursor.execute(f"""CREATE TABLE IF NOT EXISTS {self.db} (
+					id 				INT 			NOT NULL,
+					title 			VARCHAR(255) 	NOT NULL,
+					author 			VARCHAR(255) 	NOT NULL,
+					published_date 	DATE 			NOT NULL,
+					genre 			VARCHAR(255) 	NOT NULL,
+					price 			FLOAT 			NOT NULL,
+					copies_sold 	INT 			NOT NULL,
+					ran 			INT 			NOT NULL
+				)""")
+				#rows = cursor.execute(f"DESCRIBE {self.db}")
+				#self.logger.info(f"Table description : {rows} columns")
+				#for row in cursor.fetchall():
+				#	self.logger.info(f"\t {row}")
+	
+
 		except Exception as e:
 			self.logger.error("Error connecting to MySQL: %s", e)
 			raise ValueError("Error connecting to MySQL")
+
+		#Utilisé pour stocker les index
+		self.__indexes = []
 
 		self.logger.info("MySQL object created")
 
@@ -126,7 +148,6 @@ class MySQL:
 		except Exception as e:
 			self.logger.error("Error closing MySQL connection: %s", e)
 
-
 	def create_one(self, data: dict, silent = False):
 		"""
 		Create one record in the database
@@ -135,17 +156,24 @@ class MySQL:
 			if not silent:
 				self.__update_operation_count()
 
-			with self.connection.cursor() as cursor:
-				sql = f"INSERT INTO {self.db} (id,title, author, published_date, genre, price, copies_sold,ran) VALUES ( %s, %s, %s, %s, %s, %s, %s, %s)"
-    
-				start_time = time_ns()
-				rows = cursor.execute(sql, data)
-				end_time = time_ns()
+			if not isinstance(data, dict):
+				self.logger.error(f"Data is not a dict: {type(data)} - {data}")
 
+			with self.connection.cursor() as cursor:
+				sql = 	f"INSERT INTO {self.db} (id,title, author, published_date, genre, price, copies_sold,ran) "\
+						f"VALUES (%(id)s, %(title)s, %(author)s, %(published_date)s, %(genre)s, %(price)s, %(copies_sold)s, %(ran)s)"
+
+				start_time	= time_ns()
+				rows		= cursor.execute(sql, data)
+				end_time 	= time_ns()
 				add_operation_time("create_one", end_time-start_time)
-				self.logger.debug(f"inserted {rows} record: %s", data)
+
+				self.logger.debug(f"inserted {rows} record: ", data)
+    
 		except Exception as e:
-			self.logger.error("Error creating record: %s", e)
+			self.logger.error("Error creating one record: %s", e)
+			self.logger.error(f"\t sql : {sql}")
+			self.logger.error(f"\t data : {data}")
 
 	def create_many(self, data: list[dict],silent = False):
 		"""
@@ -155,8 +183,8 @@ class MySQL:
 			if not silent:
 				self.__update_operation_count()
 			with self.connection.cursor() as cursor:
-				sql = f"INSERT INTO {self.db} (id,title, author, published_date, genre, price, copies_sold,ran) VALUES ( %s, %s, %s, %s, %s, %s, %s, %s)"
-
+				sql =	f"INSERT INTO {self.db} (id,title, author, published_date, genre, price, copies_sold,ran) "\
+						f"VALUES (%(id)s, %(title)s, %(author)s, %(published_date)s, %(genre)s, %(price)s, %(copies_sold)s, %(ran)s)"
 				start_time = time_ns()
 				rows = cursor.executemany(sql, data)
 				end_time = time_ns()
@@ -164,7 +192,7 @@ class MySQL:
 				self.logger.debug(f"inserted {rows} records: %s", data)
     
 		except Exception as e:
-			self.logger.error("Error creating records: %s", e)
+			self.logger.error("Error creating many records: %s", e)
 
 	def update_one(self, original : dict, updated : dict):
 		"""
@@ -173,41 +201,66 @@ class MySQL:
 		try:
 			self.__update_operation_count()
 			with self.connection.cursor() as cursor:
-				sql = f"""UPDATE {self.db} SET title=%s, author=%s, published_date=%s, genre=%s, price=%s, copies_sold=%s, ran=%s
-					WHERE id=%s AND title=%s AND author=%s AND published_date=%s AND genre=%s AND price=%s AND copies_sold=%s AND ran=%s"""
 
+				conditions = ""
+				for key in original:
+					conditions += f'{key}="{original[key]}" AND '
+				conditions = conditions[:-4]
+
+				new_values = ""
+				for key in updated:
+					new_values += f'{key}="{updated[key]}", '
+				new_values = new_values[:-2]
+
+				sql = 	f"UPDATE {self.db} "\
+						f"SET {new_values} "\
+						f"WHERE {conditions} LIMIT 1"
+       
 				start_time = time_ns()
-				nb_rows_affected = cursor.execute(sql, (updated, original))
+				nb_rows_affected = cursor.execute(sql)
 				end_time = time_ns()
 				add_operation_time("update_one", end_time-start_time)
 
 				self.logger.debug(f"updated {nb_rows_affected} record: %s", updated)
 
 		except Exception as e:
-			self.logger.error("Error updating record: %s", e)
+			self.logger.error("Error updating one record: %s", e)
 
-	def update_many(self,updated : list[dict]):
+	def update_many(self,original:dict,updated : list[dict] | dict):
 		"""
 		Update many records in the database
 		"""
 		try:
 			self.__update_operation_count()
-			with self.connection.cursor() as cursor:
-				sql = f"""	UPDATE {self.db} 
-							SET price = price + 5.95 , 
-							copies_sold = copies_sold + 100 
-							WHERE id=%s"""
-				values = [d["id"] for d in updated]
 
-				start_time = time_ns()
-				nb_rows_affected = cursor.executemany(sql, values)
-				end_time = time_ns()
+			if not isinstance(updated, list):
+				updated = [updated]
+
+			with self.connection.cursor() as cursor:
+
+				conditions = ""
+				for key in original:
+					conditions += f'{key}="{original[key]}" AND '
+				conditions = conditions[:-4]
+
+				new_values = ""
+				for key in updated[0]:
+					new_values += f'{key}=%({key})s, '
+				new_values = new_values[:-2]
+
+				sql = 	f"UPDATE {self.db} "\
+						f"SET {new_values} "\
+						f"WHERE {conditions}"
+
+				start_time	= time_ns()
+				nb_rows_affected = cursor.executemany(sql, updated)
+				end_time	= time_ns()
 				add_operation_time("update_many", end_time-start_time)
 	
-				self.logger.debug(f"updated {nb_rows_affected} records: %s", updated)
+				self.logger.debug(f"updated {nb_rows_affected} records: ", updated)
 
 		except Exception as e:
-			self.logger.error("Error updating records: %s", e)
+			self.logger.error("Error updating many records: %s", e)
 
 	def delete_one(self, data: dict):
 		"""
@@ -216,73 +269,120 @@ class MySQL:
 		try:
 			self.__update_operation_count()
 			with self.connection.cursor() as cursor:
-				sql = f"DELETE FROM {self.db} WHERE id=%s AND title=%s AND author=%s AND published_date=%s AND genre=%s AND price=%s AND copies_sold=%s AND ran=%s"
+				conditions=""
+				for key in data:
+					conditions += f'{key}="{data[key]}" AND '
+				conditions = conditions[:-4]
+    
+				sql = 	f"DELETE FROM {self.db} "\
+						f"WHERE {conditions} "\
+						f"LIMIT 1"
 				
 				start_time = time_ns()
-				rows = cursor.execute(sql, data)
+				rows = cursor.execute(sql)
 				end_time = time_ns()
 				add_operation_time("delete_one", end_time-start_time)
-    
-				self.logger.debug(f"deleted {rows} record: %s", data)
-		except Exception as e:
-			self.logger.error("Error deleting record: %s", e)
 
-	def delete_many(self, data: list[dict]):
+				self.logger.debug(f"deleted {rows} record: ", data)
+		except Exception as e:
+			self.logger.error("Error deleting one record: %s", e)
+			self.logger.error(f"\t sql : {sql}")
+
+	def delete_many(self, data: list[dict] | dict):
 		"""
 		Delete many records in the database
 		"""
 		try:
+			self.__update_operation_count()
+			if not isinstance(data, list):
+				data = [data]
 			with self.connection.cursor() as cursor:
-				sql = f"DELETE FROM {self.db} WHERE ran=%s"
-				values = [(d["ran"]) for d in data]
+				conditions = ""
+				for key in data[0]:
+					conditions += f'{key}=%({key})s AND '
+				conditions = conditions[:-4]
+
+				sql = f"DELETE FROM {self.db} WHERE {conditions}"
 
 				start_time = time_ns()
-				rows = cursor.executemany(sql, values)
+				rows = cursor.executemany(sql, data)
 				end_time = time_ns()
 				add_operation_time("delete_many", end_time-start_time)
 	
 				self.logger.debug(f"deleted {rows} records: %s", data)
 		except Exception as e:
-			self.logger.error("Error deleting records: %s", e)
+			self.logger.error("Error deleting many records: %s", e)
+			self.logger.error(f"\t sql : {sql}")
 
-	def read_one(self, data: dict):
+	def read_one(self, data: dict, print_result: bool =False):
 		"""
 		Select one record in the database
 		"""
 		try:
 			self.__update_operation_count()
 			with self.connection.cursor() as cursor:
-				sql = f"SELECT * FROM {self.db} WHERE id=%s AND title=%s AND author=%s AND published_date=%s AND genre=%s AND price=%s AND copies_sold=%s AND ran=%s"
-				
+				conditions = ""
+				for key in data:
+					conditions += f'{key}="{key}" AND '
+				conditions = conditions[:-4]
+
+				sql = 	f"SELECT * FROM {self.db} "\
+						f"WHERE {conditions}"
+		
 				start_time = time_ns()
-				rows = cursor.execute(sql, data)
+				rows = cursor.execute(sql)
 				end_time = time_ns()
 				add_operation_time("read_one", end_time-start_time)
-	
-				self.logger.debug(f"selected {rows} record: %s", data)
-				return cursor.fetchone()
+				result = cursor.fetchone()
+				if print_result:
+					self.logger.debug(f"selected {rows} record: ", data)
+					self.logger.info(f"result: {result}")
+					
+				return result
+
 		except Exception as e:
-			self.logger.error("Error selecting record: %s", e)
+			self.logger.error("Error selecting one record: %s", e)
+			self.logger.error(f"\t sql : {sql}")
+			self.logger.error(f"\t data : {data}")
 	
-	def read_many(self, data: list[dict]):
+	def read_many(self, data: list[dict] | dict, print_result : bool =False):
 		"""
 		Select many records in the database
 		"""
 		try:
 			self.__update_operation_count()
+			if not isinstance(data, list):
+				data = [data]
 			with self.connection.cursor() as cursor:
-				sql = f"SELECT * FROM {self.db} WHERE ran=%s"
-				values = [(d.ran) for d in data]
+				# On récupère les clés des données
+				keys = ""
+				values = ""
+				for key in data[0]:
+					keys += f'{key},'
+					values += f'%({key})s,'
+				#on enlève la dernière virgule
+				keys = keys[:-1]
+				values = values[:-1]
+
+				sql =	f"SELECT * FROM {self.db} "\
+						f"WHERE ({keys}) = ({values})"
+
+				#values = [(d.ran) for d in data]
 
 				start_time = time_ns()
-				rows = cursor.executemany(sql, values)
+				rows = cursor.executemany(sql,data)
 				end_time = time_ns()
 				add_operation_time("read_many", end_time-start_time)
-
-				self.logger.debug(f"selected {rows} records: %s", data)
+			
+				result = cursor.fetchall()
+				if print_result:
+					self.logger.debug(f"selected {rows} records: %s", data)
+					self.logger.info(f"result: {result}")
+					
 				return cursor.fetchall()
 		except Exception as e:
-			self.logger.error("Error selecting records: %s", e)
+			self.logger.error("Error selecting many records: %s", e)
+			self.logger.error(f"\t sql : {sql}")
 	
 	def read(self, print_result=True):
 		"""
@@ -299,67 +399,120 @@ class MySQL:
 	
 				if print_result:
 					self.logger.debug(f"selected {rows} records: %s", cursor.fetchall())
+
 		except Exception as e:
 			self.logger.error("Error selecting records: %s", e)
 	
-	def create_index(self, index_name, column):
+	def create_index(self, index):
 		"""
 		Create an index in the database
 		"""
 		try:
 			with self.connection.cursor() as cursor:
-				sql = f"CREATE INDEX {index_name} ON {self.db} ({column})"
-				rows = cursor.execute(sql)
-				self.logger.debug(f"created index {index_name} on column {column}")
+				sql = f"CREATE INDEX `{index}_index` ON `{self.db}` (`{index}`)"
+				cursor.execute(sql)
+				self.__indexes.append(f"{index}")
+
+				self.logger.debug(f"created index {index}_index  on column {index}")
+		except pymysql.Error as e:
+			# On check si c'est une erreur de duplication
+			if e.args[0] == 1061:
+				# si c'est le cas, on avertit simplement
+				self.logger.warning(f"Index '{index}_index' already exists")
+			else:
+				self.logger.error(f"Pymysql Error creating index '{index}_index' -> {e}")
 		except Exception as e:
-			self.logger.error("Error creating index: %s", e)
+			self.logger.error(f"Error creating index '{index}_index' -> {e}")
 	
 	def create_indexes(self, indexes : list[str]):
 		"""
 		Create many indexes in the database
 		"""
 		try:
-			with self.connection.cursor() as cursor:
-				index_names = [f"{index}_index" for index in indexes]
-				sql = f"CREATE INDEX {index_names} ON {self.db} ({indexes})"
-				rows = cursor.execute(sql)
-				self.logger.debug(f"created indexes {index_names} on columns {indexes}")
-		except Exception as e:
-			self.logger.error("Error creating indexes: %s", e)
 
-	def drop_index(self, index_name):
+			for index in indexes:
+				self.create_index(index)
+
+			#self.logger.debug(f"created indexes {indexes}")
+
+		except pymysql.Error as e:
+			# On check si c'est une erreur de duplication
+			if e.args[0] == 1061:
+				# si c'est le cas, on ignore l'erreur
+				self.warning(f"Index '{index}_index' already exists")
+			else:
+				self.logger.error(f"Pymysql Error creating index '{index}_index' -> {e}")
+
+		except Exception as e:
+			self.logger.error(f"Error creating indexes: {indexes} -> {e}")
+
+	def drop_index(self, index_name:str):
 		"""
 		Drop an index in the database
 		"""
 		try:
 			with self.connection.cursor() as cursor:
-				sql = f"DROP INDEX {index_name} ON {self.db}"
-				rows = cursor.execute(sql)
+				# On vérifie si l'index est bien nommé
+				if not index_name.endswith("_index"):
+							index_name += "_index"
+				sql = f"DROP INDEX `{index_name}` ON `{self.db}`"
+				cursor.execute(sql)
+
+				try:
+					self.__indexes.remove(index_name)
+				except ValueError:
+					pass
+ 
 				self.logger.debug(f"dropped index {index_name}")
+
+		except pymysql.Error as e:
+			# On regarde si c'est une erreur d'existance de l'index 
+			if e.args[0] == 1091:
+				self.logger.warning(f"L'inex '{index_name}' n'existe pas")
+			else:
+				self.logger.error(f"Pymysql Error dropping index '{index_name}' -> {e}")
+			
 		except Exception as e:
 			self.logger.error("Error dropping index: %s", e)
 
-	def drop_indexes(self, indexes : list[str] | None = None):
+	def drop_indexes(self,index_names : list[str] | None = None):
 		"""
-		Drop many indexes in the database
+		Drop all indexes in the database if no index_names are provided
+		Else drop the indexes in the list
 		"""
 
+		sql		= ""
 		try:
 			with self.connection.cursor() as cursor:
-				if indexes is None:
-					sql = f"""SET GROUP_CONCAT_MAX_LEN=10000;
-								SELECT CONCAT( 'ALTER TABLE `', table_name ,'` DROP INDEX `', index_name ,'`;')
-								FROM information_schema.statistics
-								WHERE table_schema = '{self.db}' AND table_name = '{self.db}';"""
-				else:
-					index_names = [f"{index}_index" for index in indexes]
-					sql = f"DROP INDEX {index_names} ON {self.db}"
 
-				rows = cursor.execute(sql)
-				self.logger.debug(f"dropped indexes {index_names}")
+				# Si aucun index n'est fourni, on récupère tous les index et on les supprime
+				if index_names is None or index_names == []:
+					cursor.execute(f"SHOW INDEXES FROM {self.db}")
+					index_names = [index[2] for index in cursor.fetchall()]
+
+				for index in index_names:
+					self.drop_index(index)
+
+				#self.logger.debug(f"dropped indexes {index_names}")
+
+		except pymysql.Error as e:
+			self.logger.error(f"Pymysql Error dropping indexes '{index_names}' -> {e}")
+			self.logger.error(f"\t sql : {sql}")
 		
 		except Exception as e:
 			self.logger.error("Error dropping indexes: %s", e)
+
+	def drop_all(self):
+		"""
+		Drop all records in the database
+		"""
+		try:
+			with self.connection.cursor() as cursor:
+				sql = f"DELETE FROM {self.db}"
+				cursor.execute(sql)
+				self.logger.debug(f"deleted all records")
+		except Exception as e:
+			self.logger.error("Error deleting all records: %s", e)
 
 ######### Utilitaires #########
 
@@ -418,7 +571,7 @@ def violin_plot_operation_times(test_type="test",test_name=""):
 		q1		= percentile(data, 25)
 		q3		= percentile(data, 75)
 		median	= np_median(data)
-		mean	= mean(data)
+		mean	= np_mean(data)
 		
 
 		# Ajout du nuage de points 
@@ -447,14 +600,19 @@ def violin_plot_operation_times(test_type="test",test_name=""):
 		ax.legend(handles=legend_elements, loc='upper right', title=f"{test_name} - {operation}")
 
 		# Ajout des labels et du titre
-		ax.set_title(f"Temps mesuré pour réaliser l'opération: {operation}")
+		ax.set_title(f"Temps mesuré pour {operation}")
 		ax.set_ylabel("Temps (µs)")
   
 		# On sauvegarde la figure
+		if path.exists(f"plots/MySQL/{test_type}/{test_name}/{operation}.png"):
+			remove(f"plots/MySQL/{test_type}/{test_name}/{operation}.png")
 		plt.savefig(f"plots/MySQL/{test_type}/{test_name}/{operation}.png")
 
 		# On réinitialise le graphique
 		plt.clf()
+  
+		# on ferme la figure
+		plt.close()
 
 def plot_operation_times( data = dict,test_type="test",test_name=""):
 	"""
@@ -470,19 +628,24 @@ def plot_operation_times( data = dict,test_type="test",test_name=""):
 		# On récupère les données de temps en y et les données en x (quantité de données)
 		# data[operation] = [(nb_donnees,[liste des temps])]
 		nb_donnees	= [data[operation][i][0] for i in range(len(data[operation]))]
-		moyens		= [mean(data[operation][i][1]) for i in range(len(data[operation]))]
+		moyens		= [np_mean(data[operation][i][1]) for i in range(len(data[operation]))]
 		# On affiche le temps moyen en µs en fonction de la quantité de données
 		plt.plot(nb_donnees,moyens, label=f"{operation} : µs" )
-		plt.title("Temps moyen d'opération en fonction de la quantité de données")
+		plt.title(f"Temps moyen d'{operation} en fonction de la quantité de données")
 		plt.xlabel("Données dans la base de données")
 		plt.ylabel('Time (µs)')
 		plt.legend()
 
 		# On sauvegarde la figure
+		if path.exists(f"plots/MySQL/{test_type}/{test_name}/{operation}.png"):
+			remove(f"plots/MySQL/{test_type}/{test_name}/{operation}.png")
 		plt.savefig(f"plots/MySQL/{test_type}/{test_name}/{operation}.png")
 
 		# On réinitialise le graphique
 		plt.clf()
+  
+		# on ferme la figure
+		plt.close()
 	
 	if len(data) == 0:
 		print("No data to plot")
@@ -491,7 +654,7 @@ def plot_operation_times( data = dict,test_type="test",test_name=""):
 ######### Tests de performance #########
 
 def global_test_one(mysql: MySQL,plot_name :str ,  nb_data:int = num_records):
-	global num_records_per_many, generated_file, updated_file
+	global num_records,num_records_per_many, generated_file, updated_file, operation_times
  
 	mysql.logger.info("Test global one by one " + plot_name)
  
@@ -505,7 +668,6 @@ def global_test_one(mysql: MySQL,plot_name :str ,  nb_data:int = num_records):
 		mysql.logger.warning(f"Gathered {len(dataset)} records instead of {nb_data}")
 
 	nb_data = len(dataset)
-	
 	### Tests avec données une par une  ###
  
 	## Test d'insertion de données
@@ -541,7 +703,7 @@ def global_test_one(mysql: MySQL,plot_name :str ,  nb_data:int = num_records):
 				if original[key] != modified[key]:
 					new_values = {key: modified[key]}
 					break
-			mysql.update_one(update[0],{ "$set": new_values})
+			mysql.update_one(update[0], new_values)
 			
 
 	## Test de suppression de données
@@ -551,7 +713,7 @@ def global_test_one(mysql: MySQL,plot_name :str ,  nb_data:int = num_records):
 
 	# Dessiner les graphiques
 	try:
-		violin_plot_operation_times(plot_name, "global_one")
+		violin_plot_operation_times(plot_name, "global_test_one")
 	except Exception as e:
 		mysql.logger.error(f"global_test_one : error plotting -> {e}")
 
@@ -563,10 +725,10 @@ def global_test_one(mysql: MySQL,plot_name :str ,  nb_data:int = num_records):
 	mysql.drop_all()	
  
 	# On réinitialise les données des opérations
-	mysql.clear_operation_data()
+	operation_times.clear()
 
 def global_test_many(mysql: MySQL,plot_name :str, nb_data:int = num_records):
-	global updated_file, generated_file, num_records_per_many, num_records
+	global updated_file, generated_file, num_records_per_many, num_records, operation_times
 
 	mysql.logger.info("Test global many" + plot_name)
 
@@ -597,14 +759,14 @@ def global_test_many(mysql: MySQL,plot_name :str, nb_data:int = num_records):
 	## Test de mise à jour de données
 	
 	# Chargement des données à modifier
-	updated_dataset = extract_updated_books_from_file(updated_file,nb_data)
+	#updated_dataset = extract_updated_books_from_file(updated_file,nb_data)
 	# note : update_dataset contains the original and modified data
  
 	mysql.logger.debug("Test update many : ")
 	for i in range(0,num_records_per_many):
 		# On met à jour les données
 		# Avec le champ "ran" qui est entre O  
-		mysql.update_many({"ran" : i %num_records_per_many},{ "$inc": {"price" : 5.00, "copies_sold": 100} } )
+		mysql.update_many({"ran" : i %num_records_per_many}, {"price" : 5.00, "copies_sold": 100} )
 
 	dataset.clear()
  
@@ -632,7 +794,7 @@ def global_test_many(mysql: MySQL,plot_name :str, nb_data:int = num_records):
 	mysql.drop_all()
  
 	# On réinitialise les données des opérations
-	mysql.clear_operation_data()
+	operation_times.clear()
 
 def test_one_various_data(mysql: MySQL,plot_name :str, steps=arange(1000,num_records,num_records/100)):
 	"""
@@ -679,7 +841,7 @@ def test_one_various_data(mysql: MySQL,plot_name :str, steps=arange(1000,num_rec
 
 		# On teste la mise à jour
 		new_book = modify_book(book)
-		mysql.update_one({"id":book["id"]}, {"$set": new_book})
+		mysql.update_one({"id":book["id"]}, new_book)
 	
 		# On teste la suppression
 		mysql.delete_one({"id":book["id"]})
@@ -696,7 +858,7 @@ def test_one_various_data(mysql: MySQL,plot_name :str, steps=arange(1000,num_rec
 
 	# On dessine les graphiques
 	try:
-		plot_operation_times(tests_data,plot_name)
+		plot_operation_times(tests_data,plot_name,"test_one_various_data")
 	except Exception as e:
 		mysql.logger.error(f"test_one_various_data : error plotting -> {e}")
  
@@ -750,7 +912,7 @@ def test_many_various_data(mysql: MySQL,plot_name :str, steps=arange(1000,num_re
 		mysql.read_many({"price":0.0})
 
 		# On teste la mise à jour
-		mysql.update_many({"price":0.00}, {"$set": {"genre": "updated"} })
+		mysql.update_many({"price":0.00}, {"genre": "updated"})
 	
 		# On teste la suppression
 		mysql.delete_many({"price":0.0})
@@ -765,7 +927,7 @@ def test_many_various_data(mysql: MySQL,plot_name :str, steps=arange(1000,num_re
 	
 	# On dessine les graphiques
 	try:
-		plot_operation_times(tests_data,plot_name)
+		plot_operation_times(tests_data,plot_name,"test_many_various_data")
 	except Exception as e:
 		mysql.logger.error(f"test_many_various_data: error plotting -> {e}")
   
@@ -793,7 +955,7 @@ def test_indexed(mysql: MySQL,plot_name :str, test_function,**kwargs):
 def run_tests(mysql: MySQL, type_test:str, steps=arange(1000,num_records,num_records/10000)):
 	
 	if mysql is None:
-		raise ValueError("MongoDB instance is None")
+		raise ValueError("MySQL instance is None")
 
 	# Supprimer les index si existants
 	mysql.drop_indexes()
@@ -850,18 +1012,21 @@ def run_tests(mysql: MySQL, type_test:str, steps=arange(1000,num_records,num_rec
 
 
 def print_progress(total,text="Running tests..."):
-	global operations_done, operation_Event	
+	global operations_done, operation_Event,operation_lock
  
-	with alive_bar(total) as bar:
+	with alive_bar(total=total,manual=True) as bar:
 		bar.text(text)
 		print_progress.run = True
 		# Attendre operation_Event
 		while operations_done < total and print_progress.run:
 			operation_Event.wait()
 			operation_Event.clear()
-			bar()
+			with operation_lock:
+				percent = operations_done/total
+			bar(percent)
 			bar.text(print_progress.text)
 
+		bar(1.)
 		bar.text(f"Operations done !")
 print_progress.run		= True
 print_progress.text		="Running tests..."
@@ -870,26 +1035,28 @@ print_progress.text		="Running tests..."
 if __name__ == "__main__":
 
 	# On affiche les informations système
-	print_system_info()
+	#print_system_info()
 
 	# On charge la configuration
 	get_configuration()
  
-	parser = ArgumentParser(description="MongoDB performance tests")
+	parser = ArgumentParser(description="MySQL performance tests")
 	parser.add_argument("--verbose",	help="increase output verbosity",	action="store_true")
 	# Ajouter des arguments pour savoir quel(s) test(s) effectuer 
 	parser.add_argument("--standalone", help="Run tests with a standalone",	action="store_true" )
-	parser.add_argument("--replica", 	help="Run tests with replica set",	action="store_true" )
+	#parser.add_argument("--replica", 	help="Run tests with replica set",	action="store_true" )
 	parser.add_argument("--sharded", 	help="Run tests with shards ",		action="store_true" )
 	parser.add_argument("--all", 		help="Run all tests", 				action="store_true" )
  
 	args = parser.parse_args()
 
-	if (not args.standalone) and (not args.replica) and (not args.sharded) and (not args.all):
+	if (not args.standalone) and (not args.sharded) and (not args.all):
 		#parser.error("No action requested, add --standalone, --replica, --sharded or --all")
 		args.all = True
 
-	steps	= arange(1000,num_records,num_records/100)
+	# On veut nb_measurements mesures allant jusqu'à num_records.
+	# Donc on prend num_records/nb_measurements comme pas et on prend comme départ :0
+	steps	= arange(0,num_records,num_records/nb_measurements)
 	size 	= len(steps)
  
 	# Calcul le nombre total d'opérations à effectuer pour l'affichage de la progression pour une instance de test
@@ -905,8 +1072,8 @@ if __name__ == "__main__":
  
 	if args.standalone or args.all:
 		coeff += 1
-	if args.replica or args.all:
-		coeff += 1
+	#if args.replica or args.all:
+	#	coeff += 1
 	if args.sharded or args.all:
 		coeff += 1
 	# On multiplie par le nombre de tests
@@ -916,41 +1083,43 @@ if __name__ == "__main__":
 	progress_T = Thread(target=print_progress, args=((total,)) )
 	progress_T.start()
 	
-	errors = ""
+	# On crée les instances de MySQL
+	mysql_standalone ,mysql_replica ,mysql_sharded = None, None, None
+	# On définit le niveau de log
 	debug_level = DEBUG if args.verbose else INFO
-	mongo_standalone	= None
-	mongo_replica		= None
-	mongo_sharded		= None
+	# On définit les modes d'ouverture des fichiers de logs
+	alone_dbg_mode, replica_dbg_mode, sharded_dbg_mode = "w", "w", "w"
+	if coeff >= 2:
+		sharded_dbg_mode = "a+"
+		replica_dbg_mode = "a+" if args.standalone else "w"
 
 	if args.standalone or args.all:
 		try:
 		
-			mysql_standalone = MySQL(debug_level=INFO)
+			mysql_standalone = MySQL(debug_level=INFO,dbg_file_mode=alone_dbg_mode)
 			print_progress.text = "Tests en mode standalone..."
-			run_tests(mysql_standalone, "single_instance")
+			run_tests(mysql_standalone, "single_instance",steps=steps)
 	
 		except Exception as e:
 		
 			print(f"Erreur avec le test en standalone: {e}")
-			errors += f"Test en standalone: erreur -> {e}\n"
 	
 		finally:
 			if mysql_standalone is not None:
 				del mysql_standalone
 	
-	if args.replica or args.all:
-		print("No replica set tests")
+	#if args.replica or args.all:
+	#	print("No replica set tests")
 		#try:
 		#
-		#	mysql_replica = MySQL(using_replica_set=True,debug_level=INFO)
+		#	mysql_replica = MySQL(using_replica_set=True,debug_level=INFO,dbg_file_mode=replica_dbg_mode)
 		#	print_progress.text = "Tests en mode Replica..."
-		#	run_tests(mysql_replica, "replica_set")
+		#	run_tests(mysql_replica, "replica_set",steps=steps)
 		#	del mysql_replica
 	#
 		#except Exception as e:
 		#
 		#	print(f"Erreur avec le test avec Replica Set: {e}")
-		#	errors += f"Erreur avec le test avec Replica Set: {e}\n"
 		#finally:
 		#
 		#	if mysql_replica is not None:
@@ -959,14 +1128,13 @@ if __name__ == "__main__":
 	if args.sharded or args.all:
 		try:
 
-			mysql_sharded = MySQL(using_shard=True,debug_level=INFO)
+			mysql_sharded = MySQL(using_shard=True,debug_level=INFO,dbg_file_mode=sharded_dbg_mode)
 			print_progress.text = "Tests en mode Sharded..."
-			run_tests(mysql_sharded, "sharding")
+			run_tests(mysql_sharded, "sharding",steps=steps)
 
 		except Exception as e:
 		
 			print(f"Erreur avec le test avec Shards: {e}")
-			errors += f"Test avec Shards: erreur -> {e}\n"
 	
 		finally:
 		
@@ -976,7 +1144,6 @@ if __name__ == "__main__":
 	# On finit le thread de progressions
 	print_progress.run = False
 	operation_Event.set()
-	progress_T.join(timeout=1)
+	progress_T.join(timeout=3)
 	
 	print("End of tests")
-	print(errors)
