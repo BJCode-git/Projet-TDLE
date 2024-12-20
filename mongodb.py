@@ -7,6 +7,7 @@ from argparse import ArgumentParser
 
 # For Mongo DB operations
 from pymongo	import MongoClient, IndexModel
+from pymongo	import ASCENDING, DESCENDING
 # For measuring operation time
 from pymongo	import monitoring
 #from time		import perf_counter_ns
@@ -160,7 +161,7 @@ class MongoDB:
 											event_listeners=[CommandLogger()],
 											#directConnection=True,
 											retryWrites=True,  # Active les tentatives d'écriture automatiques
-											readPreference="primaryPreferred"
+											readPreference="nearest"
 										)
 			else:
 				self.client	= MongoClient(	mongo_host,
@@ -220,9 +221,9 @@ class MongoDB:
 			if self.collection.create_indexes(fields) is not None:
 				self.logger.debug(f"Indexes created : {fields}")
 			else:
-				self.logger.error(f"Error creating indexes : {fields}")
+				self.logger.error(f"MongoDB.create_indexes : No index created among {fields}")
 		except Exception as e:
-			self.logger.error(f"Error creating indexes : {e}")
+			self.logger.error(f"MongoDB.create_indexes : Error creating indexes -> {e}")
 
 	def drop_indexes(self):
 		"""
@@ -275,6 +276,12 @@ class MongoDB:
 				if print_result:
 					self.logger.debug(x)
 				l.append(x)
+			if len(l) == 0:
+				self.logger.warning(f"No data found with : {query}")
+				# Dans ce cas, on va afficher les champs de données de la base collection
+				# pour voir si on a des données
+				self.logger.info(f"Fields : {self.collection.find_one()}")
+
 		except Exception as e:
 			self.logger.error(f"Error reading many data : {e}")
 		finally:
@@ -323,7 +330,7 @@ class MongoDB:
 			if self.collection.delete_one(query).deleted_count > 0:
 				self.logger.debug(f"Data deleted : {query}")
 			else:
-				self.logger.error(f"No data deleted with : {query}")
+				self.logger.warning(f"No data deleted with : {query}")
 		except Exception as e:
 			self.logger.error(f"Error deleting one data : {e}")
 	
@@ -371,8 +378,8 @@ class MongoDB:
 		try:
 			if self.collection.delete_many(query).deleted_count > 0:
 				self.logger.debug(f"Data deleted : {query}")
-			#else:
-			#	self.logger.error(f"No data deleted with : {query}")
+			else:
+				self.logger.debug(f"No data deleted with : {query}")
 		except Exception as e:
 			self.logger.error(f"Error deleting many data : {e}")
 	
@@ -617,7 +624,7 @@ def global_test_one(mongo: MongoDB,plot_name :str ,  nb_data:int = num_records):
 def global_test_many(mongo: MongoDB,plot_name :str, nb_data:int = num_records):
 	global updated_file, generated_file, num_records_per_many, num_records
 
-	mongo.logger.info("Test global many" + plot_name)
+	mongo.logger.info("Test global many " + plot_name)
 
 	### Tests avec plusieurs données à la fois  ###
 	
@@ -653,7 +660,7 @@ def global_test_many(mongo: MongoDB,plot_name :str, nb_data:int = num_records):
 	for i in range(0,num_records_per_many):
 		# On met à jour les données
 		# Avec le champ "ran" qui est entre O  
-		mongo.update_many({"ran" : i %num_records_per_many},{ "$inc": {"price" : 5.00, "copies_sold": 100} } )
+		mongo.update_many({"ran" : i%num_records_per_many},{ "$inc": {"price" : 5.00, "copies_sold": 100} } )
 
 	dataset.clear()
  
@@ -835,22 +842,24 @@ def test_many_various_data(mongo: MongoDB,plot_name :str, steps=arange(1000,num_
 
 def test_indexed(mongo: MongoDB,plot_name :str, test_function,**kwargs):
 	# On définit les index
-	indexes = [	IndexModel("title"), 
-				IndexModel("author"), 
-				IndexModel("published_date"), 
-				IndexModel("genre"), 
+	indexes = [ IndexModel("title"),
+				IndexModel("author"),
+				IndexModel("published_date"),
+				IndexModel("genre"),
 				IndexModel("copies_sold"),
-				IndexModel("ran")]
+				IndexModel("ran")
+			  ]
 	mongo.logger.debug("Creating indexes...")
-	# On efface les index si existants
+ 
+	# On efface tous les index existants
 	mongo.drop_indexes()
  
 	# On distingue id des autres index car id est utilisé pour le sharding
 	try:
-		index_id = mongo.create_index("id",unique=True)
-		mongo.create_index(index_id)
+		mongo.create_index("id",unique=True)
 	except Exception as e:
 		mongo.logger.error(f"Error creating indexes : {e}")
+
 	# On crée les index
 	mongo.create_indexes(indexes)
 	
@@ -952,8 +961,8 @@ if __name__ == "__main__":
 	parser.add_argument("--standalone", help="Run tests with a standalone",	action="store_true" )
 	parser.add_argument("--replica", 	help="Run tests with replica set",	action="store_true" )
 	parser.add_argument("--sharded", 	help="Run tests with shards ",		action="store_true" )
-	parser.add_argument("--all", 		help="Run all tests", 				action="store_true" )
- 
+
+
 	args = parser.parse_args()
 
 	if (not args.standalone) and (not args.replica) and (not args.sharded) and (not args.all):

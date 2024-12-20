@@ -1,4 +1,4 @@
-faker
+Faker
 PyMySQL
 python-dotenv
 py-cpuinfo

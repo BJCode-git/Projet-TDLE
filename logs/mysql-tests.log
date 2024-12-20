@@ -1,3 +1,22 @@
-[INFO] mysql.py:131 - MySQL object created
-[INFO] mysql.py:659 - Test global one by one single_instance
-on 0: [WARNING] mysql.py:668 - Gathered 10000 records instead of 20000
+on 0: [INFO] mysql.py:131 - MySQL object created
+on 0: [INFO] mysql.py:659 - Test global one by one single_instance
+on 40000: [INFO] mysql.py:733 - Test global manysingle_instance
+on 41021: [INFO] mysql.py:805 - Test one by one with various data single_instance
+on 45021: [INFO] mysql.py:874 - Test many with various data single_instance
+on 49021: [INFO] mysql.py:659 - Test global one by one single_instance
+on 89021: [INFO] mysql.py:733 - Test global manysingle_instance_indexed
+on 90042: [INFO] mysql.py:805 - Test one by one with various data single_instance_indexed
+on 94042: [INFO] mysql.py:874 - Test many with various data single_instance_indexed
+on 98042: [INFO] mysql.py:147 - MySQL connection closed
+on 98042: [INFO] mysql.py:131 - MySQL object created
+on 98042: [INFO] mysql.py:659 - Test global one by one sharding
+on 138042: [INFO] mysql.py:733 - Test global manysharding
+on 139063: [INFO] mysql.py:805 - Test one by one with various data sharding
+on 143063: [INFO] mysql.py:874 - Test many with various data sharding
+on 147063: [INFO] mysql.py:659 - Test global one by one sharding
+on 187063: [INFO] mysql.py:733 - Test global manysharding_indexed
+on 188084: [INFO] mysql.py:805 - Test one by one with various data sharding_indexed
+on 192084: [INFO] mysql.py:874 - Test many with various data sharding_indexed
+on 196084: [INFO] mysql.py:147 - MySQL connection closed
+g_indexed
+[INFO] mysql.py:147 - MySQL connection closed

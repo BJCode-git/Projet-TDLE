@@ -24,7 +24,7 @@ docker compose up -d start_mongo
 
 On réalise ensuite les tests de performance de mongodb en utilisant les commandes suivantes:
 ```bash
-pip3 install -r requirements/mongodb-requirements.txt &&
+pip3 install -r requirements/mongo-requirements.txt &&
 python3 mongodb.py
 ```
 

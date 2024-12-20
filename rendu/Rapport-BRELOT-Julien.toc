@@ -1,0 +1,25 @@
+\contentsline {chapter}{\numberline {1}Introduction}{2}{chapter.1}%
+\contentsline {chapter}{\numberline {2}Contexte et Objectifs}{3}{chapter.2}%
+\contentsline {section}{\numberline {2.1}Systèmes Comparés}{3}{section.2.1}%
+\contentsline {subsection}{\numberline {2.1.1}MongoDB}{3}{subsection.2.1.1}%
+\contentsline {section}{\numberline {2.2}Étude des aspects de MongoDB}{4}{section.2.2}%
+\contentsline {subsection}{\numberline {2.2.1}Comparaison des Performances des Requêtes}{4}{subsection.2.2.1}%
+\contentsline {subsection}{\numberline {2.2.2}Performances avec et sans Indexation}{4}{subsection.2.2.2}%
+\contentsline {subsection}{\numberline {2.2.3}Impact de la Réplication et de la Fragmentation}{4}{subsection.2.2.3}%
+\contentsline {paragraph}{Réplication dans MongoDB :}{4}{section*.2}%
+\contentsline {paragraph}{Fragmentation dans MongoDB :}{5}{section*.3}%
+\contentsline {paragraph}{Comparaison avec MySQL :}{5}{section*.4}%
+\contentsline {chapter}{\numberline {3}Configurations des Tests}{6}{chapter.3}%
+\contentsline {section}{\numberline {3.1}Architecture MongoDB}{6}{section.3.1}%
+\contentsline {subsection}{\numberline {3.1.1}Standalone}{6}{subsection.3.1.1}%
+\contentsline {subsection}{\numberline {3.1.2}Replica Set}{7}{subsection.3.1.2}%
+\contentsline {subsection}{\numberline {3.1.3}Sharded Cluster}{7}{subsection.3.1.3}%
+\contentsline {section}{\numberline {3.2}Architecture MySQL}{8}{section.3.2}%
+\contentsline {subsection}{\numberline {3.2.1}Standalone}{8}{subsection.3.2.1}%
+\contentsline {subsection}{\numberline {3.2.2}Sharded Architecture}{8}{subsection.3.2.2}%
+\contentsline {chapter}{\numberline {4}Structure des Données}{9}{chapter.4}%
+\contentsline {chapter}{\numberline {5}Batterie de Tests}{10}{chapter.5}%
+\contentsline {section}{\numberline {5.1}Types de Tests}{10}{section.5.1}%
+\contentsline {section}{\numberline {5.2}Scénarios}{10}{section.5.2}%
+\contentsline {chapter}{\numberline {6}Résultats et Analyses}{11}{chapter.6}%
+\contentsline {section}{\numberline {6.1}Graphiques des Performances}{11}{section.6.1}%

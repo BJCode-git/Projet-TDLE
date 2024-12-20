@@ -17,7 +17,7 @@ services:
         MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
         MYSQL_PASSWORD:             ${MYSQL_PASSWORD}
         MYSQL_DATABASE:             ${MYSQL_DATABASE}
-        MYSQL_USER:                 ${MYSQL_USER}
+        #MYSQL_USER:                 ${MYSQL_USER}
 
 
   ### End Standalone ###
@@ -235,7 +235,7 @@ services:
         MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
         MYSQL_PASSWORD:      ${MYSQL_PASSWORD}
         MYSQL_DATABASE:      ${MYSQL_DATABASE}
-        MYSQL_USER:          ${MYSQL_USER}
+        #MYSQL_USER:          ${MYSQL_USER}
         SERVICE_TAGS: dev
         SERVICE_NAME: mysql
 
@@ -259,7 +259,7 @@ services:
               genre VARCHAR(100),
               price FLOAT,
               copies_sold INT NOT NULL,
-              rand INT NOT NULL
+              ran INT NOT NULL
           )" &&
           exit 0'
       depends_on:

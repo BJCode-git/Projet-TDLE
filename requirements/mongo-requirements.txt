@@ -1,5 +1,5 @@
 pymongo
-faker
+Faker
 python-dotenv
 py-cpuinfo
 psutil
