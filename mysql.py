@@ -1125,8 +1125,8 @@ if __name__ == "__main__":
 	# On définit les modes d'ouverture des fichiers de logs
 	alone_dbg_mode, replica_dbg_mode, sharded_dbg_mode = "w", "w", "w"
 	if coeff >= 2:
-		sharded_dbg_mode = "a+"
-		replica_dbg_mode = "a+" if args.standalone else "w"
+		sharded_dbg_mode = "a"
+		replica_dbg_mode = "a" if args.standalone else "w"
 
 	if args.standalone or args.all:
 		try:

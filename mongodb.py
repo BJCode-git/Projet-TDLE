@@ -904,30 +904,30 @@ def run_tests(mongo: MongoDB, type_test:str, steps=arange(1000,num_records,num_r
 	mongo.drop_indexes()
 
 	# Without indexes tests
-	try:
-		print_progress.text = "Running "+type_test + "_global_one..."
-		global_test_one(mongo, type_test)
-	except Exception as e:
-		mongo.logger.error(f"Error with global_test_one : {e}")
-
-	try:
-		print_progress.text = "Running"+type_test + "_global_many..."
-		global_test_many(mongo, type_test)
-	except Exception as e:
-		mongo.logger.error(f"Error with global_test_many : {e}")
-
-	try:
-		print_progress.text = "Running "+type_test + "_various_one..."
-		test_one_various_data(mongo, type_test,steps=steps)
-	except Exception as e:
-		mongo.logger.error(f"Error with test_one_various_data : {e}")
-
-	try:
-		print_progress.text = "Running "+type_test + "_various_many..."
-		test_many_various_data(mongo, type_test,steps=steps)
-	except Exception as e:
-		mongo.logger.error(f"Error with test_many_various_data : {e}")
-
+	#try:
+	#	print_progress.text = "Running "+type_test + "_global_one..."
+	#	global_test_one(mongo, type_test)
+	#except Exception as e:
+	#	mongo.logger.error(f"Error with global_test_one : {e}")
+#
+	#try:
+	#	print_progress.text = "Running"+type_test + "_global_many..."
+	#	global_test_many(mongo, type_test)
+	#except Exception as e:
+	#	mongo.logger.error(f"Error with global_test_many : {e}")
+#
+	#try:
+	#	print_progress.text = "Running "+type_test + "_various_one..."
+	#	test_one_various_data(mongo, type_test,steps=steps)
+	#except Exception as e:
+	#	mongo.logger.error(f"Error with test_one_various_data : {e}")
+#
+	#try:
+	#	print_progress.text = "Running "+type_test + "_various_many..."
+	#	test_many_various_data(mongo, type_test,steps=steps)
+	#except Exception as e:
+	#	mongo.logger.error(f"Error with test_many_various_data : {e}")
+#
 	# With indexes tests
 	try:
 		print_progress.text = "Running "+type_test + "_global_one_indexed..."
@@ -1038,8 +1038,8 @@ if __name__ == "__main__":
 	# On définit le mode d'écriture du fichier de log selon les tests à effectués (on se base sur le coeff)
 	alone_dbg_mode, replica_dbg_mode, sharded_dbg_mode = "w", "w", "w"
 	if coeff >= 2:
-		sharded_dbg_mode = "a+"
-		replica_dbg_mode = "a+" if args.standalone else "w"
+		sharded_dbg_mode = "a"
+		replica_dbg_mode = "a" if args.standalone else "w"
   
 	if args.standalone or args.all:
 		try:
