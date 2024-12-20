@@ -5,6 +5,7 @@ from argparse import ArgumentParser
 
 import pymysql
 from time import perf_counter_ns as time_ns
+from collections import defaultdict
 
 # For statistics
 from numpy import arange, median as np_median, mean as np_mean, percentile
@@ -35,8 +36,8 @@ from alive_progress import alive_bar
 from threading import Thread, Lock, Event
 
 
-operation_times		= {}
-failed_operations	= {}
+operation_times		= defaultdict(list)
+failed_operations	= defaultdict(list)
 system_info			= ""
 operations_done		= 0
 operation_lock		= Lock()
@@ -50,8 +51,6 @@ def add_operation_time(operation, time):
 	global operation_times
 	# Convert nanoseconds time to microseconds
 	time = time/1000
-	if operation not in operation_times:
-		operation_times[operation] = [time]
 	operation_times[operation].append(time)
 
 class MySQL:
@@ -166,7 +165,7 @@ class MySQL:
 				start_time	= time_ns()
 				rows		= cursor.execute(sql, data)
 				end_time 	= time_ns()
-				add_operation_time("create_one", end_time-start_time)
+				add_operation_time("insert", end_time-start_time)
 
 				self.logger.debug(f"inserted {rows} record: ", data)
     
@@ -188,7 +187,7 @@ class MySQL:
 				start_time = time_ns()
 				rows = cursor.executemany(sql, data)
 				end_time = time_ns()
-				add_operation_time("create_many", end_time-start_time)
+				add_operation_time("insert", end_time-start_time)
 				self.logger.debug(f"inserted {rows} records: %s", data)
     
 		except Exception as e:
@@ -219,7 +218,7 @@ class MySQL:
 				start_time = time_ns()
 				nb_rows_affected = cursor.execute(sql)
 				end_time = time_ns()
-				add_operation_time("update_one", end_time-start_time)
+				add_operation_time("update", end_time-start_time)
 
 				self.logger.debug(f"updated {nb_rows_affected} record: %s", updated)
 
@@ -255,7 +254,7 @@ class MySQL:
 				start_time	= time_ns()
 				nb_rows_affected = cursor.executemany(sql, updated)
 				end_time	= time_ns()
-				add_operation_time("update_many", end_time-start_time)
+				add_operation_time("update", end_time-start_time)
 	
 				self.logger.debug(f"updated {nb_rows_affected} records: ", updated)
 
@@ -281,7 +280,7 @@ class MySQL:
 				start_time = time_ns()
 				rows = cursor.execute(sql)
 				end_time = time_ns()
-				add_operation_time("delete_one", end_time-start_time)
+				add_operation_time("delete", end_time-start_time)
 
 				self.logger.debug(f"deleted {rows} record: ", data)
 		except Exception as e:
@@ -307,7 +306,7 @@ class MySQL:
 				start_time = time_ns()
 				rows = cursor.executemany(sql, data)
 				end_time = time_ns()
-				add_operation_time("delete_many", end_time-start_time)
+				add_operation_time("delete", end_time-start_time)
 	
 				self.logger.debug(f"deleted {rows} records: %s", data)
 		except Exception as e:
@@ -332,7 +331,7 @@ class MySQL:
 				start_time = time_ns()
 				rows = cursor.execute(sql)
 				end_time = time_ns()
-				add_operation_time("read_one", end_time-start_time)
+				add_operation_time("find", end_time-start_time)
 				result = cursor.fetchone()
 				if print_result:
 					self.logger.debug(f"selected {rows} record: ", data)
@@ -372,7 +371,7 @@ class MySQL:
 				start_time = time_ns()
 				rows = cursor.executemany(sql,data)
 				end_time = time_ns()
-				add_operation_time("read_many", end_time-start_time)
+				add_operation_time("find", end_time-start_time)
 			
 				result = cursor.fetchall()
 				if print_result:
@@ -395,7 +394,7 @@ class MySQL:
 				start_time = time_ns()
 				rows = cursor.execute(sql)
 				end_time = time_ns()
-				add_operation_time("read", end_time-start_time)
+				add_operation_time("find", end_time-start_time)
 	
 				if print_result:
 					self.logger.debug(f"selected {rows} records: %s", cursor.fetchall())
@@ -614,7 +613,7 @@ def violin_plot_operation_times(test_type="test",test_name=""):
 		# on ferme la figure
 		plt.close()
 
-def plot_operation_times( data = dict,test_type="test",test_name=""):
+def plot_operation_times( data:dict,step,test_type="test",test_name=""):
 	"""
 		Affiche le temps des opérations selon la quantité de données dans la base de données
 	"""
@@ -625,17 +624,34 @@ def plot_operation_times( data = dict,test_type="test",test_name=""):
 	# On va créer un graphique pour chaque opération, on affiche que l'opération courante
 	for operation in data:
 		
-		# On récupère les données de temps en y et les données en x (quantité de données)
-		# data[operation] = [(nb_donnees,[liste des temps])]
-		nb_donnees	= [data[operation][i][0] for i in range(len(data[operation]))]
-		moyens		= [np_mean(data[operation][i][1]) for i in range(len(data[operation]))]
+		# Calcul des stats : médiane, moyenne et quartiles		
+		moyenne	= np_mean(data[operation])
+		mediane	= np_median(data[operation])
+		q1		= percentile(data[operation], 25)
+		q3		= percentile(data[operation], 75)
+
 		# On affiche le temps moyen en µs en fonction de la quantité de données
-		plt.plot(nb_donnees,moyens, label=f"{operation} : µs" )
-		plt.title(f"Temps moyen d'{operation} en fonction de la quantité de données")
+		plt.plot(steps,data[operation], label=f"{operation} : µs" )
+	
+		# On trace les lignes de moyenne, médiane et quartiles
+		plt.axhline(y=moyenne, color='r', linestyle='--', label=f'Moyenne : {moyenne:.2f} µs')
+		plt.axhline(y=mediane, color='g', linestyle='--', label=f'Médiane : {mediane:.2f} µs')
+		plt.axhline(y=q1, color='b', linestyle='--', label=f'Quartiles 1 (25%) : {q1:.2f} µs')
+		plt.axhline(y=q3, color='b', linestyle='--', label=f'Quartiles 3 (75%) : {q3:.2f} µs')
+  
+		# on ajoute dans la légende les couleurs des lignes et les labels
+		legend_elements = [
+			Line2D([0], [0], color='r', linestyle='--', label=f'Moyenne : {moyenne:.2f} µs'),
+			Line2D([0], [0], color='g', linestyle='--', label=f'Médiane : {mediane:.2f} µs'),
+			Line2D([0], [0], color='b', linestyle='--', label=f'Quartiles 1 (25%) : {q1:.2f} µs'),
+			Line2D([0], [0], color='b', linestyle='--', label=f'Quartiles 3 (75%) : {q3:.2f} µs'),
+		]
+		
+		# Personnalisation du graphique
+		plt.title(f"{operation} : Temps d'execution en fonction de la quantité de données")
 		plt.xlabel("Données dans la base de données")
 		plt.ylabel('Time (µs)')
-		plt.legend()
-
+		plt.legend(handles=legend_elements, loc='best' )
 		# On sauvegarde la figure
 		if path.exists(f"plots/MySQL/{test_type}/{test_name}/{operation}.png"):
 			remove(f"plots/MySQL/{test_type}/{test_name}/{operation}.png")
@@ -804,61 +820,68 @@ def test_one_various_data(mysql: MySQL,plot_name :str, steps=arange(1000,num_rec
 
 	mysql.logger.info("Test one by one with various data "+ plot_name)
  
-	tests_data = {}
-	for step in steps:
-		
-		# On supprime toutes les données de la collection s'il y en a
-		mysql.drop_all()
-
-		# On va extraire les données, pour opérer sur les mêmes données
-		dataset = extract_books_from_file(generated_file,step)
-
-		if len(dataset) < step:
-			mysql.logger.error(f"Gathered {len(dataset)} records instead of {step}")
-
-		# On va insérer les données
-		mysql.create_many(dataset,silent=True)
-		
-
-		# On nettoie dataset pour libérer la mémoire
-		dataset.clear()
-		
-		# On nettoie les temps des opérations, 
-		# pour recommencer les mesures
-		operation_times.clear()
-
-		# On procède au test de performance
-
-		max_id = step + 1
-		generate_book.id = max_id
-		book = generate_book(max_id)
-
-		# On teste l'insertion
-		mysql.create_one(book)
-
-		# On teste la lecture
-		mysql.read_one({"id":book["id"]})
-
-		# On teste la mise à jour
-		new_book = modify_book(book)
-		mysql.update_one({"id":book["id"]}, new_book)
+	# On supprime les données de la collection s'il y en a
+	mysql.drop_all()
+ 
+	# On extrait toutes les données dont on aura besoin
+	dataset = extract_books_from_file(generated_file,steps[-1])
+	if len(dataset) < steps[-1]:
+		mysql.logger.warning(f"Gathered {len(dataset)} records instead of {step}")
 	
-		# On teste la suppression
-		mysql.delete_one({"id":book["id"]})
+	tests_data = defaultdict(list)
+	try:
+		a=0
+		for step in steps:
+			step = int(step)
 
-		# On récupère les temps des opérations
-		data = operation_times.copy()
+			# On arrête si on dépasse le nombre de données disponibles
+			if step > len(dataset):
+				mysql.logger.warning(f"Step {step} > {len(dataset)}")
+				break
 
-		# On ajoute les données dans le tableau
-		for operation in data:
-			if operation in tests_data:
-				tests_data[operation].append((step,data[operation]))
-			else:
-				tests_data[operation] = [[step,data[operation]]]
+			# On va insérer les données  manquantes pour avoir step données initiales dans la base
+			try:
+				if a < step:
+					mysql.create_many(dataset[a:step],silent=True)
+			except Exception as e:
+				mysql.logger.error(f"test_one_various_data : init error {e}")
+			finally:
+				a = step
+		
+			# On nettoie les temps des opérations, 
+			# pour recommencer les mesures
+			operation_times.clear()
+
+			# On procède au test de performance
+
+			max_id = step + 1
+			generate_book.id = max_id
+			book = generate_book(max_id)
+
+			# On teste l'insertion
+			mysql.create_one(book)
+
+			# On teste la lecture
+			mysql.read_one({"id":book["id"]})
+
+			# On teste la mise à jour
+			new_book = modify_book(book)
+			mysql.update_one({"id":book["id"]}, new_book)
+		
+			# On teste la suppression
+			mysql.delete_one({"id":book["id"]})
+
+			# On ajoute les données dans le tableau
+
+			for operation in operation_times:
+				tests_data[operation].extend(operation_times[operation])
+
+	except Exception as e: 
+		mysql.logger.error(f"test_one_various_data: error -> {e}")
 
 	# On dessine les graphiques
 	try:
-		plot_operation_times(tests_data,plot_name,"test_one_various_data")
+		plot_operation_times(tests_data,steps,plot_name,"test_one_various_data")
 	except Exception as e:
 		mysql.logger.error(f"test_one_various_data : error plotting -> {e}")
  
@@ -873,61 +896,73 @@ def test_many_various_data(mysql: MySQL,plot_name :str, steps=arange(1000,num_re
  
 	mysql.logger.info("Test many with various data " + plot_name)
 
-	tests_data = {}
-	for step in steps:
-		
-		# On supprime toutes les données de la collection s'il y en a
-		mysql.drop_all()
-
-		# On va extraire les données, pour opérer sur les mêmes données
-		dataset = extract_books_from_file(generated_file,step)
-  
-		if len(dataset) < step:
-			mysql.logger.error(f"Gathered {len(dataset)} records instead of {step}")
-			break
-
-		# On va insérer les données
-		mysql.create_many(dataset,silent=True)
-		# On nettoie dataset pour libérer la mémoire
-		dataset.clear()
-		
-		# On nettoie les temps des opérations,  pour recommencer les mesures
-		operation_times.clear()
-
-		## On procède au test de performance
-
-		# Génère les données à insérer
-		max_id = step + 1
-		books = [generate_book(max_id + i) for i in range(0,num_records_per_many)]
-
-		# Modifie le prix à 0 pour la suppression/lecture exacte de num_records_per_many données
-		# en effet un prix à 0 est impossible pour un livre, ce seront donc les données à supprimer
-		for book in books:
-			book["price"]= 0.0
-
-		# On teste l'insertion
-		mysql.create_many(books)
-
-		# On teste la lecture
-		mysql.read_many({"price":0.0})
-
-		# On teste la mise à jour
-		mysql.update_many({"price":0.00}, {"genre": "updated"})
+	# On supprime les données de la collection s'il y en a
+	mysql.drop_all()
+ 
+	# On extrait toutes les données dont on aura besoin
+	dataset = extract_books_from_file(generated_file,steps[-1])
+	if len(dataset) < steps[-1]:
+		mysql.logger.warning(f"Gathered {len(dataset)} records instead of {step}")
 	
-		# On teste la suppression
-		mysql.delete_many({"price":0.0})
+	tests_data = defaultdict(list)
+	try:
+		a=0
+		for step in steps:
+			step = int(step)
 
-		# On récupère les temps des opérations
-		# et on ajoute les données dans le tableau
-		for operation in operation_times:
-			if operation in tests_data:
-				tests_data[operation].append((step,operation_times[operation]))
-			else:
-				tests_data[operation] = [[step,operation_times[operation]]]
+			# On arrête si on dépasse le nombre de données disponibles
+			if step > len(dataset):
+				mysql.logger.warning(f"Step {step} > {len(dataset)}")
+				break
+
+			# On va insérer les données  manquantes pour avoir step données initiales dans la base
+			try:
+				if a < step:
+					mysql.create_many(dataset[a:step],silent=True)
+			except Exception as e:
+				mysql.logger.error(f"test_one_various_data : init error {e}")
+			finally:
+				a = step
+		
+			# On nettoie les temps des opérations,  pour recommencer les mesures
+			operation_times.clear()
+
+			## On procède au test de performance
+
+			# Génère les données à insérer
+			max_id = step + 1
+			books = [generate_book(max_id + i) for i in range(0,num_records_per_many)]
+
+			# Modifie le prix à 0 pour la suppression/lecture exacte de num_records_per_many données
+			# en effet un prix à 0 est impossible pour un livre, ce seront donc les données à supprimer
+			for book in books:
+				book["price"]= 0.0
+
+			# On teste l'insertion
+			mysql.create_many(books)
+
+			# On teste la lecture
+			mysql.read_many({"price":0.0})
+
+			# On teste la mise à jour
+			mysql.update_many({"price":0.00}, {"genre": "updated"})
+			
+
+			# On teste la suppression
+			mysql.delete_many({"price":0.0})
+
+			# On récupère les temps des opérations
+			# et on ajoute les données dans le tableau
+			for operation in operation_times:
+				tests_data[operation].extend(operation_times[operation])
+			
+
+	except Exception as e:
+		mysql.logger.error(f"test_many_various_data: error -> {e}")
 	
 	# On dessine les graphiques
 	try:
-		plot_operation_times(tests_data,plot_name,"test_many_various_data")
+		plot_operation_times(tests_data,steps,plot_name,"test_many_various_data")
 	except Exception as e:
 		mysql.logger.error(f"test_many_various_data: error plotting -> {e}")
   

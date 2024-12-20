@@ -2,6 +2,9 @@
 from os 		import getenv , makedirs,path, remove
 from dotenv 	import load_dotenv
 
+# for quitting the program
+import atexit
+
 # for arg parsing
 from argparse import ArgumentParser
 
@@ -9,6 +12,7 @@ from argparse import ArgumentParser
 from pymongo	import MongoClient, IndexModel
 from pymongo	import ASCENDING, DESCENDING
 # For measuring operation time
+from collections import defaultdict
 from pymongo	import monitoring
 #from time		import perf_counter_ns
 #from time		import sleep
@@ -43,8 +47,8 @@ from threading import Thread, Lock, Event
 # L'idée c'est de monitorer le temps des opérations de lecture, écriture, mise à jour et suppression
 # Avec la classe MongoDB, grâce au monitoring, on peut mesurer le temps des opérations
 
-operation_times		= {}
-failed_operations	= {}
+operation_times		= defaultdict(list)
+failed_operations	= dict()
 system_info			= ""
 operations_done		= 0
 operation_lock		= Lock()
@@ -79,10 +83,9 @@ class CommandLogger(monitoring.CommandListener):
 		operation_name = event.command_name
 		#print(f"Operation : {operation_name} - Time : {operation_time} µs")
 		# On ajoute le temps de l'opération dans le tableau
-		if operation_name not in operation_times:
-			operation_times[operation_name] = [operation_time]
-		else:
-			operation_times[operation_name].append(operation_time)
+		# Si l'opération n'existe pas, on la crée
+
+		operation_times[operation_name].append(operation_time)
 
 	def failed(self, event):
 		#On compte le nombre d'opérations qui ont échoué et on stocke le nom de l'opération, la requête et le message d'erreur
@@ -506,7 +509,7 @@ def violin_plot_operation_times(test_type="test",test_name=""):
 		# on ferme la figure
 		plt.close()	
 
-def plot_operation_times( data = dict,test_type="test",test_name=""):
+def plot_operation_times( data : dict, steps, test_type="test",test_name=""):
 	"""
 		Affiche le temps des opérations selon la quantité de données dans la base de données
 	"""
@@ -517,17 +520,34 @@ def plot_operation_times( data = dict,test_type="test",test_name=""):
 	# On va créer un graphique pour chaque opération, on affiche que l'opération courante
 	for operation in data:
 		
-		# On récupère les données de temps en y et les données en x (quantité de données)
-		# data[operation] = [(nb_donnees,[liste des temps])]
-		nb_donnees	= [data[operation][i][0] for i in range(len(data[operation]))]
-		moyens		= [np_mean(data[operation][i][1]) for i in range(len(data[operation]))]
+		# Calcul des stats : médiane, moyenne et quartiles		
+		moyenne	= np_mean(data[operation])
+		mediane	= np_median(data[operation])
+		q1		= percentile(data[operation], 25)
+		q3		= percentile(data[operation], 75)
 
 		# On affiche le temps moyen en µs en fonction de la quantité de données
-		plt.plot(nb_donnees,moyens, label=f"{operation} : µs" )
-		plt.title(f"Temps moyen d'opération en fonction de la quantité de données")
+		plt.plot(steps,data[operation], label=f"{operation} : µs" )
+	
+		# On trace les lignes de moyenne, médiane et quartiles
+		plt.axhline(y=moyenne, color='r', linestyle='--', label=f'Moyenne : {moyenne:.2f} µs')
+		plt.axhline(y=mediane, color='g', linestyle='--', label=f'Médiane : {mediane:.2f} µs')
+		plt.axhline(y=q1, color='b', linestyle='--', label=f'Quartiles 1 (25%) : {q1:.2f} µs')
+		plt.axhline(y=q3, color='b', linestyle='--', label=f'Quartiles 3 (75%) : {q3:.2f} µs')
+  
+		# on ajoute dans la légende les couleurs des lignes et les labels
+		legend_elements = [
+			Line2D([0], [0], color='r', linestyle='--', label=f'Moyenne : {moyenne:.2f} µs'),
+			Line2D([0], [0], color='g', linestyle='--', label=f'Médiane : {mediane:.2f} µs'),
+			Line2D([0], [0], color='b', linestyle='--', label=f'Quartiles 1 (25%) : {q1:.2f} µs'),
+			Line2D([0], [0], color='b', linestyle='--', label=f'Quartiles 3 (75%) : {q3:.2f} µs'),
+		]
+		
+		# Personnalisation du graphique
+		plt.title(f"{operation} : Temps d'execution en fonction de la quantité de données")
 		plt.xlabel("Données dans la base de données")
 		plt.ylabel('Time (µs)')
-		plt.legend()
+		plt.legend(handles=legend_elements, loc='best' )
 
 		# On sauvegarde la figure
 		if path.exists(f"plots/MongoDB/{test_type}/{test_name}/{operation}.png"):
@@ -565,7 +585,6 @@ def global_test_one(mongo: MongoDB,plot_name :str ,  nb_data:int = num_records):
 	### Tests avec données une par une  ###
  
 	## Test d'insertion de données
-	mongo.logger.debug("Test insert one by one : ")
 	for book in dataset:
 		mongo.create_one(book)
 
@@ -573,7 +592,6 @@ def global_test_one(mongo: MongoDB,plot_name :str ,  nb_data:int = num_records):
 	dataset.clear()
  
 	## Test de lecture de données sur la collection "Books", en choississant l'id
-	mongo.logger.debug("Test read one by one : ")
 	for i in range(0,nb_data):
 		mongo.read_one({"id":i},print_result=False)
 
@@ -642,7 +660,6 @@ def global_test_many(mongo: MongoDB,plot_name :str, nb_data:int = num_records):
 	# On envoie à chaque fois num_records_per_many données
 	
 	## Test d'insertion de données
-	mongo.logger.debug("Test insert many : ")
 	for i in range(0,nb_data,num_records_per_many):
 		#data = [book for book in dataset[i:i+num_records_per_many]]
 		mongo.create_many(dataset[i:i+num_records_per_many],silent=True)
@@ -656,7 +673,6 @@ def global_test_many(mongo: MongoDB,plot_name :str, nb_data:int = num_records):
 	#updated_dataset = extract_updated_books_from_file(updated_file,nb_data)
 	# note : update_dataset contains the original and modified data
  
-	mongo.logger.debug("Test update many : ")
 	for i in range(0,num_records_per_many):
 		# On met à jour les données
 		# Avec le champ "ran" qui est entre O  
@@ -665,12 +681,10 @@ def global_test_many(mongo: MongoDB,plot_name :str, nb_data:int = num_records):
 	dataset.clear()
  
 	## Test de lecture de données
-	mongo.logger.debug("Test read all : ")
 	for i in range(0,num_records_per_many):
 		mongo.read_many({"ran" : i},print_result=False)
 
 	## Test de suppression de données
-	mongo.logger.debug("Test delete many : ")
 	for i in range(0,num_records_per_many):
 		# On supprime les données
 		mongo.delete_many({"ran" : i})
@@ -699,25 +713,35 @@ def test_one_various_data(mongo: MongoDB,plot_name :str, steps=arange(1000,num_r
 
 	mongo.logger.info("Test one by one with various data "+ plot_name)
 	
-	tests_data = dict()
+	# On supprime toutes les données de la collection s'il y en a
+	mongo.drop_all()
+ 
+	# On extrait toutes les données dont on aura besoin
+	dataset = extract_books_from_file(generated_file,steps[-1])
+	if len(dataset) < steps[-1]:
+		mongo.logger.warning(f"Gathered {len(dataset)} records instead of {step}")
+	
+	tests_data = defaultdict(list)
+
 	try:
+		a=0
 		for step in steps:
-			
-			# On supprime toutes les données de la collection s'il y en a
-			mongo.drop_all()
+			step = int(step)
 
-			# On va extraire les données, pour opérer sur les mêmes données
-			dataset = extract_books_from_file(generated_file,step)
-			if len(dataset) < step:
-				mongo.logger.error(f"Gathered {len(dataset)} records instead of {step}")
+			# On arrête si on dépasse le nombre de données disponibles
+			if step > len(dataset):
+				mongo.logger.warning(f"Step {step} > {len(dataset)}")
+				break
 
-			# On va insérer les données
-			
-			mongo.create_many(dataset,silent=True)
+			# On va insérer les données  manquantes pour avoir step données initiales dans la base
+			try:
+				if a < step:
+					mongo.create_many(dataset[a:step],silent=True)
+			except Exception as e:
+				mongo.logger.error(f"test_one_various_data : {e}")
+			finally:
+				a = step
 
-			# On nettoie dataset pour libérer la mémoire
-			dataset.clear()
-			
 			# On nettoie les temps des opérations, 
 			# pour recommencer les mesures
 			operation_times.clear()
@@ -747,17 +771,14 @@ def test_one_various_data(mongo: MongoDB,plot_name :str, steps=arange(1000,num_r
 			# On récupère les temps des opérations et 
 			# On ajoute les données dans le tableau
 			for operation in operation_times:
-				if operation in tests_data:
-					tests_data[operation].append((step,operation_times[operation]))
-				else:
-					tests_data[operation] = [(step,operation_times[operation])]
+				tests_data[operation].extend(operation_times[operation])
 
 	except Exception as e:
 		mongo.logger.error(f"test_one_various_data : operation error -> {e}")
 
 	# On dessine les graphiques
 	try:
-		plot_operation_times(tests_data,plot_name,"test_one_various_data")
+		plot_operation_times(tests_data,steps,plot_name,"test_one_various_data")
 	except Exception as e:
 		mongo.logger.error(f"test_one_various_data : error plotting -> {e}")
  
@@ -772,25 +793,33 @@ def test_many_various_data(mongo: MongoDB,plot_name :str, steps=arange(1000,num_
  
 	mongo.logger.info("Test many with various data " + plot_name)
 
-	tests_data = dict()
-	
-	try:
-		for step in steps:
-			
-			# On supprime toutes les données de la collection s'il y en a
-			mongo.drop_all()
+	# On supprime toutes les données de la collection s'il y en a
+	mongo.drop_all()
+ 
+	# On extrait toutes les données dont on aura besoin
+	dataset = extract_books_from_file(generated_file,steps[-1])
+	if len(dataset) < steps[-1]:
+		mongo.logger.warning(f"Gathered {len(dataset)} records instead of {step}")
 
-			# On va extraire les données, pour opérer sur les mêmes données
-			dataset = extract_books_from_file(generated_file,step)
-	
-			if len(dataset) < step:
-				mongo.logger.error(f"Gathered {len(dataset)} records instead of {step}")
+	tests_data = defaultdict(list)
+	try:
+		a=0
+		for step in steps:
+			step = int(step)
+
+			# On arrête si on dépasse le nombre de données disponibles
+			if step > len(dataset):
+				mongo.logger.warning(f"Step {step} > {len(dataset)}")
 				break
 
-			# On va insérer les données
-			mongo.create_many(dataset,silent=True)
-			# On nettoie le dataset pour libérer la mémoire
-			dataset.clear()
+			# On va insérer les données  manquantes pour avoir step données initiales dans la base
+			try:
+				if a < step:
+					mongo.create_many(dataset[a:step],silent=True)
+			except Exception as e:
+				mongo.logger.error(f"test_one_various_data : {e}")
+			finally:
+				a = step
 	
 			## On procède au test de performance
 
@@ -798,14 +827,14 @@ def test_many_various_data(mongo: MongoDB,plot_name :str, steps=arange(1000,num_
 			max_id			 = step + 1
 			generate_book.id = max_id
 			books = [generate_book(max_id + i) for i in range(0,num_records_per_many)]
+
 			# Modifie le prix à 0 pour la suppression/lecture exacte de num_records_per_many données
 			# en effet un prix à 0 est impossible pour un livre, ce seront donc les données à supprimer
-			
 			for book in books:
 				book["price"] = 0.0
 
 			# On nettoie les temps des opérations, 
-			# pour recommencer les mesures
+			# pour prendre les mesures
 			operation_times.clear()
 
 			# On teste l'insertion
@@ -818,22 +847,22 @@ def test_many_various_data(mongo: MongoDB,plot_name :str, steps=arange(1000,num_
 			mongo.update_many({"price":0.00}, {"$set": {"genre": "updated"} })
 	
 			# On teste la suppression
-			mongo.delete_many({"price":0.0})
+			mongo.delete_many({"price":0.0, "genre": "updated"})
+
+			# Après ces opérations, on est revenu à l'état initial
+			# On a juste les données ajoutées initialement dans la base avant les tests
 	
 			# On récupère les temps des opérations et
 			# on ajoute les données dans le tableau
 			for operation in operation_times:
-				if operation in tests_data:
-					tests_data[operation].append((step,operation_times[operation]))
-				else:
-					tests_data[operation] = [(step,operation_times[operation])]
+				tests_data[operation].extend(operation_times[operation])
 
 	except Exception as e:
 		mongo.logger.error(f"test_many_various_data : operation error -> {e}")
 
 	# On dessine les graphiques
 	try:
-		plot_operation_times(tests_data,plot_name,"test_many_various_data")
+		plot_operation_times(tests_data,steps,plot_name,"test_many_various_data")
 	except Exception as e:
 		mongo.logger.error(f"test_many_various_data: error plotting -> {e}")
   
@@ -958,9 +987,10 @@ if __name__ == "__main__":
 	parser = ArgumentParser(description="MongoDB performance tests")
 	parser.add_argument("--verbose",	help="increase output verbosity",	action="store_true")
 	# Ajouter des arguments pour savoir quel(s) test(s) effectuer 
-	parser.add_argument("--standalone", help="Run tests with a standalone",	action="store_true" )
-	parser.add_argument("--replica", 	help="Run tests with replica set",	action="store_true" )
-	parser.add_argument("--sharded", 	help="Run tests with shards ",		action="store_true" )
+	parser.add_argument("--standalone", help="Run tests with a standalone",			action="store_true" )
+	parser.add_argument("--replica", 	help="Run tests with replica set",			action="store_true" )
+	parser.add_argument("--sharded", 	help="Run tests with shards ",				action="store_true" )
+	parser.add_argument("--all", 		help="Run tests with all configurations",	action="store_true" )
 
 
 	args = parser.parse_args()
@@ -971,7 +1001,7 @@ if __name__ == "__main__":
 
 	# On part avec O données initiales et on veut 100 mesures intermédiaires jusqu'à num_records
 	# On aura donc un besoin d'un pas de (num_records - 0)/nb_measurements
-	steps	= arange(0,num_records,num_records/nb_measurements)
+	steps	= arange(0,num_records,num_records/nb_measurements,dtype=int)
 	size 	= len(steps) # Nombre de mesures intermédiaires : nb_measurements
  
 	# Calcul le nombre total d'opérations à effectuer pour l'affichage de la progression pour une instance de test

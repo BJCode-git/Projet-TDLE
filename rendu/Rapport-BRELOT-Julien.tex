@@ -6,6 +6,26 @@
 \usepackage{float}
 \usepackage{amsmath}
 \usepackage{booktabs}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{xcolor}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,
+    urlcolor=cyan
+}
+
+\title{\textbf{Rapport de Comparaison des Performances entre MySQL et MongoDB}}
+\author{\textbf{Auteur:} \textit{Votre Nom}}
+\date{\textit{Décembre 2024}}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
 
 \title{\textbf{Rapport de Comparaison des Performances entre MySQL et MongoDB}}
 \author{\textbf{Auteur:} \textit{Brelot Julien}}
@@ -85,7 +105,7 @@ La réplication et la fragmentation influencent directement les performances et 
 Un seul serveur MongoDB.
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{architectures/Standalone.png}
+    \includegraphics[width=0.8\textwidth]{architectures/Standalone.jpg}
     \caption{Architecture Standalone.}
     \label{fig:standalone}
 \end{figure}
@@ -95,7 +115,7 @@ Un seul serveur MongoDB.
 Un Replica Set avec un nœud primaire et deux nœuds secondaires.
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=0.8\textwidth]{architectures/MongoDBReplica.png}
+	\includegraphics[width=0.8\textwidth]{architectures/MongoDBReplica.jpg}
 	\caption{Architecture Replica Set.}
 	\label{fig:mong-replica-set}
 \end{figure}
@@ -127,7 +147,7 @@ Architecture MySQL-NDB avec :
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=0.8\textwidth]{architectures/MySQLCluster.png}
+	\includegraphics[width=0.8\textwidth]{architectures/MySQLCluster.jpg}
 	\caption{Architecture MySQL Cluster.}
 	\label{fig:mysql-cluster}
 \end{figure}
@@ -193,7 +213,7 @@ CREATE TABLE test (
 \section{Réplication et Sharding}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{architectures/MongoDBShards.jpg
+    \includegraphics[width=0.8\textwidth]{architectures/MongoDBShards.jpg}
     \caption{Impact de la réplication et du sharding sur les performances.}
     \label{fig:replication_sharding}
 \end{figure}

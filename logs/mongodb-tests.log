@@ -1,225 +1,31 @@
-[INFO] mongodb.py:l.180 - Connected to MongoDB 127.0.0.1:27017, Server Informations :
-[INFO] mongodb.py:l.182 - 	 version : 8.0.4
-[INFO] mongodb.py:l.182 - 	 gitVersion : bc35ab4305d9920d9d0491c1c9ef9b72383d31f9
-[INFO] mongodb.py:l.182 - 	 modules : []
-[INFO] mongodb.py:l.182 - 	 allocator : tcmalloc-google
-[INFO] mongodb.py:l.182 - 	 javascriptEngine : mozjs
-[INFO] mongodb.py:l.182 - 	 sysInfo : deprecated
-[INFO] mongodb.py:l.182 - 	 versionArray : [8, 0, 4, 0]
-[INFO] mongodb.py:l.182 - 	 openssl : {'running': 'OpenSSL 3.0.13 30 Jan 2024', 'compiled': 'OpenSSL 3.0.13 30 Jan 2024'}
-[INFO] mongodb.py:l.182 - 	 buildEnvironment : {'distmod': 'ubuntu2404', 'distarch': 'x86_64', 'cc': '/opt/mongodbtoolchain/v4/bin/gcc: gcc (GCC) 11.3.0', 'ccflags': '-Werror -include mongo/platform/basic.h -ffp-contract=off -fasynchronous-unwind-tables -g2 -Wall -Wsign-compare -Wno-unknown-pragmas -Winvalid-pch -gdwarf-5 -fno-omit-frame-pointer -fno-strict-aliasing -O2 -march=sandybridge -mtune=generic -mprefer-vector-width=128 -Wno-unused-local-typedefs -Wno-unused-function -Wno-deprecated-declarations -Wno-unused-const-variable -Wno-unused-but-set-variable -Wno-missing-braces -Wno-psabi -fstack-protector-strong -gdwarf64 -Wa,--nocompress-debug-sections -fno-builtin-memcmp -Wimplicit-fallthrough=5', 'cxx': '/opt/mongodbtoolchain/v4/bin/g++: g++ (GCC) 11.3.0', 'cxxflags': '-Woverloaded-virtual -Wpessimizing-move -Wno-maybe-uninitialized -fsized-deallocation -std=c++20', 'linkflags': '-Wl,--fatal-warnings -B/opt/mongodbtoolchain/v4/bin -gdwarf-5 -pthread -Wl,-z,now -fuse-ld=lld -fstack-protector-strong -gdwarf64 -Wl,--build-id -Wl,--hash-style=gnu -Wl,-z,noexecstack -Wl,--warn-execstack -Wl,-z,relro -Wl,--compress-debug-sections=none -Wl,-z,origin -Wl,--enable-new-dtags', 'target_arch': 'x86_64', 'target_os': 'linux', 'cppdefines': 'SAFEINT_USE_INTRINSICS 0 PCRE2_STATIC ABSL_ALLOCATOR_NOTHROW NDEBUG _XOPEN_SOURCE 700 _GNU_SOURCE _FORTIFY_SOURCE 2 ABSL_FORCE_ALIGNED_ACCESS BOOST_ENABLE_ASSERT_DEBUG_HANDLER BOOST_FILESYSTEM_NO_CXX20_ATOMIC_REF BOOST_LOG_NO_SHORTHAND_NAMES BOOST_LOG_USE_NATIVE_SYSLOG BOOST_LOG_WITHOUT_THREAD_ATTR BOOST_MATH_NO_LONG_DOUBLE_MATH_FUNCTIONS BOOST_SYSTEM_NO_DEPRECATED BOOST_THREAD_USES_DATETIME BOOST_THREAD_VERSION 5'}
-on 0: [INFO] mongodb.py:l.182 - 	 bits : 64
-on 0: [INFO] mongodb.py:l.182 - 	 debug : False
-on 0: [INFO] mongodb.py:l.182 - 	 maxBsonObjectSize : 16777216
-on 0: [INFO] mongodb.py:l.182 - 	 storageEngines : ['devnull', 'wiredTiger']
-on 0: [INFO] mongodb.py:l.182 - 	 ok : 1.0
-on 0: [INFO] mongodb.py:l.552 - Test global one by one standalone
-on 0: [WARNING] mongodb.py:l.561 - Gathered 100 records instead of 10000
-on 402: [INFO] mongodb.py:l.627 - Test global many standalone
-on 402: [WARNING] mongodb.py:l.638 - Gathered 100 records instead of 10000
-on 432: [INFO] mongodb.py:l.700 - Test one by one with various data standalone
-on 443: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 200.0
-on 448: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 300.0
-on 453: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 400.0
-on 458: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 500.0
-on 463: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 600.0
-on 468: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 700.0
-on 473: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 800.0
-on 478: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 900.0
-on 483: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 1000.0
-on 488: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 1100.0
-on 493: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 1200.0
-on 498: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 1300.0
-on 503: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 1400.0
-on 508: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 1500.0
-on 513: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 1600.0
-on 518: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 1700.0
-on 523: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 1800.0
-on 528: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 1900.0
-on 533: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 2000.0
-on 538: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 2100.0
-on 543: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 2200.0
-on 548: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 2300.0
-on 553: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 2400.0
-on 558: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 2500.0
-on 563: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 2600.0
-on 568: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 2700.0
-on 573: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 2800.0
-on 578: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 2900.0
-on 583: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 3000.0
-on 588: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 3100.0
-on 593: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 3200.0
-on 598: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 3300.0
-on 603: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 3400.0
-on 608: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 3500.0
-on 613: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 3600.0
-on 618: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 3700.0
-on 623: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 3800.0
-on 628: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 3900.0
-on 633: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 4000.0
-on 638: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 4100.0
-on 643: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 4200.0
-on 648: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 4300.0
-on 653: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 4400.0
-on 658: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 4500.0
-on 663: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 4600.0
-on 668: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 4700.0
-on 673: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 4800.0
-on 679: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 4900.0
-on 683: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 5000.0
-on 688: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 5100.0
-on 693: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 5200.0
-on 698: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 5300.0
-on 703: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 5400.0
-on 708: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 5500.0
-on 713: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 5600.0
-on 718: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 5700.0
-on 723: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 5800.0
-on 729: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 5900.0
-on 733: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 6000.0
-on 738: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 6100.0
-on 743: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 6200.0
-on 748: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 6300.0
-on 753: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 6400.0
-on 758: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 6500.0
-on 763: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 6600.0
-on 768: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 6700.0
-on 773: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 6800.0
-on 779: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 6900.0
-on 783: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 7000.0
-on 788: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 7100.0
-on 793: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 7200.0
-on 798: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 7300.0
-on 803: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 7400.0
-on 808: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 7500.0
-on 814: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 7600.0
-on 818: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 7700.0
-on 823: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 7800.0
-on 828: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 7900.0
-on 833: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 8000.0
-on 838: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 8100.0
-on 843: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 8200.0
-on 848: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 8300.0
-on 853: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 8400.0
-on 858: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 8500.0
-on 864: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 8600.0
-on 868: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 8700.0
-on 873: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 8800.0
-on 878: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 8900.0
-on 883: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 9000.0
-on 888: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 9100.0
-on 893: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 9200.0
-on 898: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 9300.0
-on 903: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 9400.0
-on 908: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 9500.0
-on 914: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 9600.0
-on 918: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 9700.0
-on 923: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 9800.0
-on 928: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 9900.0
-on 933: [INFO] mongodb.py:l.773 - Test many with various data standalone
-on 944: [ERROR] mongodb.py:l.787 - Gathered 100 records instead of 200.0
-on 945: [INFO] mongodb.py:l.552 - Test global one by one standalone
-on 945: [WARNING] mongodb.py:l.561 - Gathered 100 records instead of 10000
-on 1346: [INFO] mongodb.py:l.627 - Test global many standalone_indexed
-on 1346: [WARNING] mongodb.py:l.638 - Gathered 100 records instead of 10000
-on 1377: [INFO] mongodb.py:l.700 - Test one by one with various data standalone_indexed
-on 1388: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 200.0
-on 1393: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 300.0
-on 1398: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 400.0
-on 1403: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 500.0
-on 1409: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 600.0
-on 1413: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 700.0
-on 1418: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 800.0
-on 1423: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 900.0
-on 1428: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 1000.0
-on 1433: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 1100.0
-on 1438: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 1200.0
-on 1444: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 1300.0
-on 1448: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 1400.0
-on 1453: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 1500.0
-on 1458: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 1600.0
-on 1463: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 1700.0
-on 1468: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 1800.0
-on 1473: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 1900.0
-on 1479: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 2000.0
-on 1483: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 2100.0
-on 1488: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 2200.0
-on 1493: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 2300.0
-on 1498: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 2400.0
-on 1503: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 2500.0
-on 1508: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 2600.0
-on 1513: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 2700.0
-on 1518: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 2800.0
-on 1523: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 2900.0
-on 1528: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 3000.0
-on 1533: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 3100.0
-on 1538: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 3200.0
-on 1544: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 3300.0
-on 1548: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 3400.0
-on 1553: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 3500.0
-on 1558: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 3600.0
-on 1563: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 3700.0
-on 1568: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 3800.0
-on 1573: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 3900.0
-on 1579: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 4000.0
-on 1583: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 4100.0
-on 1588: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 4200.0
-on 1593: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 4300.0
-on 1598: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 4400.0
-on 1603: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 4500.0
-on 1608: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 4600.0
-on 1614: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 4700.0
-on 1618: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 4800.0
-on 1623: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 4900.0
-on 1628: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 5000.0
-on 1633: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 5100.0
-on 1638: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 5200.0
-on 1643: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 5300.0
-on 1648: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 5400.0
-on 1653: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 5500.0
-on 1658: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 5600.0
-on 1663: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 5700.0
-on 1668: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 5800.0
-on 1673: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 5900.0
-on 1679: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 6000.0
-on 1683: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 6100.0
-on 1688: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 6200.0
-on 1693: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 6300.0
-on 1698: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 6400.0
-on 1703: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 6500.0
-on 1708: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 6600.0
-on 1714: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 6700.0
-on 1718: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 6800.0
-on 1723: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 6900.0
-on 1728: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 7000.0
-on 1733: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 7100.0
-on 1738: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 7200.0
-on 1743: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 7300.0
-on 1748: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 7400.0
-on 1753: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 7500.0
-on 1758: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 7600.0
-on 1763: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 7700.0
-on 1768: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 7800.0
-on 1773: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 7900.0
-on 1778: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 8000.0
-on 1783: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 8100.0
-on 1788: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 8200.0
-on 1793: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 8300.0
-on 1798: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 8400.0
-on 1803: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 8500.0
-on 1808: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 8600.0
-on 1814: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 8700.0
-on 1818: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 8800.0
-on 1823: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 8900.0
-on 1828: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 9000.0
-on 1833: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 9100.0
-on 1838: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 9200.0
-on 1843: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 9300.0
-on 1849: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 9400.0
-on 1853: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 9500.0
-on 1858: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 9600.0
-on 1863: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 9700.0
-on 1868: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 9800.0
-on 1873: [ERROR] mongodb.py:l.712 - Gathered 100 records instead of 9900.0
-on 1878: [INFO] mongodb.py:l.773 - Test many with various data standalone_indexed
-on 1889: [ERROR] mongodb.py:l.787 - Gathered 100 records instead of 200.0
+[INFO] mongodb.py:l.183 - Connected to MongoDB 10.0.10.10:27115, Server Informations :
+[INFO] mongodb.py:l.185 - 	 version : 8.0.4
+[INFO] mongodb.py:l.185 - 	 gitVersion : bc35ab4305d9920d9d0491c1c9ef9b72383d31f9
+[INFO] mongodb.py:l.185 - 	 modules : []
+[INFO] mongodb.py:l.185 - 	 allocator : tcmalloc-google
+[INFO] mongodb.py:l.185 - 	 javascriptEngine : mozjs
+[INFO] mongodb.py:l.185 - 	 sysInfo : deprecated
+[INFO] mongodb.py:l.185 - 	 versionArray : [8, 0, 4, 0]
+[INFO] mongodb.py:l.185 - 	 openssl : {'running': 'OpenSSL 3.0.13 30 Jan 2024', 'compiled': 'OpenSSL 3.0.13 30 Jan 2024'}
+[INFO] mongodb.py:l.185 - 	 buildEnvironment : {'distmod': 'ubuntu2404', 'distarch': 'x86_64', 'cc': '/opt/mongodbtoolchain/v4/bin/gcc: gcc (GCC) 11.3.0', 'ccflags': '-Werror -include mongo/platform/basic.h -ffp-contract=off -fasynchronous-unwind-tables -g2 -Wall -Wsign-compare -Wno-unknown-pragmas -Winvalid-pch -gdwarf-5 -fno-omit-frame-pointer -fno-strict-aliasing -O2 -march=sandybridge -mtune=generic -mprefer-vector-width=128 -Wno-unused-local-typedefs -Wno-unused-function -Wno-deprecated-declarations -Wno-unused-const-variable -Wno-unused-but-set-variable -Wno-missing-braces -Wno-psabi -fstack-protector-strong -gdwarf64 -Wa,--nocompress-debug-sections -fno-builtin-memcmp -Wimplicit-fallthrough=5', 'cxx': '/opt/mongodbtoolchain/v4/bin/g++: g++ (GCC) 11.3.0', 'cxxflags': '-Woverloaded-virtual -Wpessimizing-move -Wno-maybe-uninitialized -fsized-deallocation -std=c++20', 'linkflags': '-Wl,--fatal-warnings -B/opt/mongodbtoolchain/v4/bin -gdwarf-5 -pthread -Wl,-z,now -fuse-ld=lld -fstack-protector-strong -gdwarf64 -Wl,--build-id -Wl,--hash-style=gnu -Wl,-z,noexecstack -Wl,--warn-execstack -Wl,-z,relro -Wl,--compress-debug-sections=none -Wl,-z,origin -Wl,--enable-new-dtags', 'target_arch': 'x86_64', 'target_os': 'linux', 'cppdefines': 'SAFEINT_USE_INTRINSICS 0 PCRE2_STATIC ABSL_ALLOCATOR_NOTHROW NDEBUG _XOPEN_SOURCE 700 _GNU_SOURCE _FORTIFY_SOURCE 2 ABSL_FORCE_ALIGNED_ACCESS BOOST_ENABLE_ASSERT_DEBUG_HANDLER BOOST_FILESYSTEM_NO_CXX20_ATOMIC_REF BOOST_LOG_NO_SHORTHAND_NAMES BOOST_LOG_USE_NATIVE_SYSLOG BOOST_LOG_WITHOUT_THREAD_ATTR BOOST_MATH_NO_LONG_DOUBLE_MATH_FUNCTIONS BOOST_SYSTEM_NO_DEPRECATED BOOST_THREAD_USES_DATETIME BOOST_THREAD_VERSION 5'}
+[INFO] mongodb.py:l.185 - 	 bits : 64
+[INFO] mongodb.py:l.185 - 	 debug : False
+[INFO] mongodb.py:l.185 - 	 maxBsonObjectSize : 16777216
+[INFO] mongodb.py:l.185 - 	 ok : 1.0
+[INFO] mongodb.py:l.185 - 	 $clusterTime : {'clusterTime': Timestamp(1734668992, 1), 'signature': {'hash': b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00', 'keyId': 0}}
+[INFO] mongodb.py:l.185 - 	 operationTime : Timestamp(1734668992, 1)
+[INFO] mongodb.py:l.572 - Test global one by one sharding
+on 401: [INFO] mongodb.py:l.645 - Test global many sharding
+on 432: [INFO] mongodb.py:l.714 - Test one by one with various data sharding
+on 834: [INFO] mongodb.py:l.794 - Test many with various data sharding
+on 1236: [ERROR] mongodb.py:l.216 - MongoDB.create_index : Index build failed: 986e847c-273a-45ab-9ad3-08b3586a1558: Collection test.test ( a1556b53-971d-492b-9ad8-79bcf992462c ) :: caused by :: cannot create index with 'unique' or 'prepareUnique' option over { id: 1 } with shard key pattern { _id: "hashed" }, full error: {'raw': {'shard2_rs/10.0.10.21:27217,10.0.10.22:27218': {'ok': 0.0, 'errmsg': 'Index build failed: 986e847c-273a-45ab-9ad3-08b3586a1558: Collection test.test ( a1556b53-971d-492b-9ad8-79bcf992462c ) :: caused by :: cannot create index with \'unique\' or \'prepareUnique\' option over { id: 1 } with shard key pattern { _id: "hashed" }', 'code': 67, 'codeName': 'CannotCreateIndex'}, 'shard1_rs/10.0.10.11:27117,10.0.10.12:27118': {'ok': 0.0, 'errmsg': 'Index build failed: e90a956b-966a-4759-a0b0-0e638b864dff: Collection test.test ( a1556b53-971d-492b-9ad8-79bcf992462c ) :: caused by :: cannot create index with \'unique\' or \'prepareUnique\' option over { id: 1 } with shard key pattern { _id: "hashed" }', 'code': 67, 'codeName': 'CannotCreateIndex'}}, 'code': 67, 'codeName': 'CannotCreateIndex', 'ok': 0.0, 'errmsg': 'Index build failed: 986e847c-273a-45ab-9ad3-08b3586a1558: Collection test.test ( a1556b53-971d-492b-9ad8-79bcf992462c ) :: caused by :: cannot create index with \'unique\' or \'prepareUnique\' option over { id: 1 } with shard key pattern { _id: "hashed" }', '$clusterTime': {'clusterTime': Timestamp(1734669003, 6), 'signature': {'hash': b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00', 'keyId': 0}}, 'operationTime': Timestamp(1734669003, 6)}
+on 1236: [INFO] mongodb.py:l.572 - Test global one by one sharding
+on 1637: [ERROR] mongodb.py:l.216 - MongoDB.create_index : Index build failed: 8ab6b02c-a008-4b89-9368-b5bb71d688c3: Collection test.test ( a1556b53-971d-492b-9ad8-79bcf992462c ) :: caused by :: cannot create index with 'unique' or 'prepareUnique' option over { id: 1 } with shard key pattern { _id: "hashed" }, full error: {'raw': {'shard1_rs/10.0.10.11:27117,10.0.10.12:27118': {'ok': 0.0, 'errmsg': 'Index build failed: 8ab6b02c-a008-4b89-9368-b5bb71d688c3: Collection test.test ( a1556b53-971d-492b-9ad8-79bcf992462c ) :: caused by :: cannot create index with \'unique\' or \'prepareUnique\' option over { id: 1 } with shard key pattern { _id: "hashed" }', 'code': 67, 'codeName': 'CannotCreateIndex'}, 'shard2_rs/10.0.10.21:27217,10.0.10.22:27218': {'ok': 0.0, 'errmsg': 'Index build failed: 4b384497-06b6-4443-8645-8b9db8e20468: Collection test.test ( a1556b53-971d-492b-9ad8-79bcf992462c ) :: caused by :: cannot create index with \'unique\' or \'prepareUnique\' option over { id: 1 } with shard key pattern { _id: "hashed" }', 'code': 67, 'codeName': 'CannotCreateIndex'}}, 'code': 67, 'codeName': 'CannotCreateIndex', 'ok': 0.0, 'errmsg': 'Index build failed: 8ab6b02c-a008-4b89-9368-b5bb71d688c3: Collection test.test ( a1556b53-971d-492b-9ad8-79bcf992462c ) :: caused by :: cannot create index with \'unique\' or \'prepareUnique\' option over { id: 1 } with shard key pattern { _id: "hashed" }', '$clusterTime': {'clusterTime': Timestamp(1734669006, 6), 'signature': {'hash': b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00', 'keyId': 0}}, 'operationTime': Timestamp(1734669006, 6)}
+on 1637: [INFO] mongodb.py:l.645 - Test global many sharding_indexed
+on 1668: [ERROR] mongodb.py:l.216 - MongoDB.create_index : Index build failed: 6806b92f-70c2-4b94-bd47-a32c3873d2f5: Collection test.test ( a1556b53-971d-492b-9ad8-79bcf992462c ) :: caused by :: cannot create index with 'unique' or 'prepareUnique' option over { id: 1 } with shard key pattern { _id: "hashed" }, full error: {'raw': {'shard2_rs/10.0.10.21:27217,10.0.10.22:27218': {'ok': 0.0, 'errmsg': 'Index build failed: 6806b92f-70c2-4b94-bd47-a32c3873d2f5: Collection test.test ( a1556b53-971d-492b-9ad8-79bcf992462c ) :: caused by :: cannot create index with \'unique\' or \'prepareUnique\' option over { id: 1 } with shard key pattern { _id: "hashed" }', 'code': 67, 'codeName': 'CannotCreateIndex'}, 'shard1_rs/10.0.10.11:27117,10.0.10.12:27118': {'ok': 0.0, 'errmsg': 'Index build failed: a4724f81-76bc-4918-b19f-500dde4e197b: Collection test.test ( a1556b53-971d-492b-9ad8-79bcf992462c ) :: caused by :: cannot create index with \'unique\' or \'prepareUnique\' option over { id: 1 } with shard key pattern { _id: "hashed" }', 'code': 67, 'codeName': 'CannotCreateIndex'}}, 'code': 67, 'codeName': 'CannotCreateIndex', 'ok': 0.0, 'errmsg': 'Index build failed: 6806b92f-70c2-4b94-bd47-a32c3873d2f5: Collection test.test ( a1556b53-971d-492b-9ad8-79bcf992462c ) :: caused by :: cannot create index with \'unique\' or \'prepareUnique\' option over { id: 1 } with shard key pattern { _id: "hashed" }', '$clusterTime': {'clusterTime': Timestamp(1734669007, 7), 'signature': {'hash': b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00', 'keyId': 0}}, 'operationTime': Timestamp(1734669007, 7)}
+on 1668: [INFO] mongodb.py:l.714 - Test one by one with various data sharding_indexed
+on 2070: [ERROR] mongodb.py:l.216 - MongoDB.create_index : Index build failed: ee26b754-7a2f-4c87-a2cb-5fc882846801: Collection test.test ( a1556b53-971d-492b-9ad8-79bcf992462c ) :: caused by :: cannot create index with 'unique' or 'prepareUnique' option over { id: 1 } with shard key pattern { _id: "hashed" }, full error: {'raw': {'shard2_rs/10.0.10.21:27217,10.0.10.22:27218': {'ok': 0.0, 'errmsg': 'Index build failed: ee26b754-7a2f-4c87-a2cb-5fc882846801: Collection test.test ( a1556b53-971d-492b-9ad8-79bcf992462c ) :: caused by :: cannot create index with \'unique\' or \'prepareUnique\' option over { id: 1 } with shard key pattern { _id: "hashed" }', 'code': 67, 'codeName': 'CannotCreateIndex'}, 'shard1_rs/10.0.10.11:27117,10.0.10.12:27118': {'ok': 0.0, 'errmsg': 'Index build failed: 1ba0036c-a68d-4969-9922-4429b4457a8e: Collection test.test ( a1556b53-971d-492b-9ad8-79bcf992462c ) :: caused by :: cannot create index with \'unique\' or \'prepareUnique\' option over { id: 1 } with shard key pattern { _id: "hashed" }', 'code': 67, 'codeName': 'CannotCreateIndex'}}, 'code': 67, 'codeName': 'CannotCreateIndex', 'ok': 0.0, 'errmsg': 'Index build failed: ee26b754-7a2f-4c87-a2cb-5fc882846801: Collection test.test ( a1556b53-971d-492b-9ad8-79bcf992462c ) :: caused by :: cannot create index with \'unique\' or \'prepareUnique\' option over { id: 1 } with shard key pattern { _id: "hashed" }', '$clusterTime': {'clusterTime': Timestamp(1734669011, 11), 'signature': {'hash': b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00', 'keyId': 0}}, 'operationTime': Timestamp(1734669011, 11)}
+on 2070: [INFO] mongodb.py:l.794 - Test many with various data sharding_indexed
+on 2073: [WARNING] mongodb.py:l.283 - No data found with : {'price': 0.0}
+on 2073: [INFO] mongodb.py:l.286 - Fields : {'_id': ObjectId('6764f2d3d6decd45031309a6'), 'id': 1, 'title': 'Cher empêcher.', 'author': 'Jules Renard-Bouvet', 'published_date': '1868-07-05', 'genre': 'Biography', 'price': 0.0, 'copies_sold': 952723, 'ran': 6}
+on 2471: [ERROR] mongodb.py:l.867 - test_many_various_data: error plotting -> x and y must have same first dimension, but have shapes (100,) and (101,)
