@@ -2,8 +2,8 @@
 from os 		import getenv , makedirs,path, remove
 from dotenv 	import load_dotenv
 
-# for quitting the program
-import atexit
+# for handling signals
+from signal import signal, SIGINT, SIGTERM
 
 # for arg parsing
 from argparse import ArgumentParser
@@ -18,7 +18,7 @@ from pymongo	import monitoring
 #from time		import sleep
 
 #  For statistics
-from numpy import arange, median as np_median, mean as np_mean, percentile
+from numpy import arange, median as np_median, mean as np_mean, std as np_std,  percentile
 from numpy.random import normal
 
 # For generating data and handling data
@@ -46,9 +46,12 @@ from threading import Thread, Lock, Event
 
 # L'idée c'est de monitorer le temps des opérations de lecture, écriture, mise à jour et suppression
 # Avec la classe MongoDB, grâce au monitoring, on peut mesurer le temps des opérations
+operation_times = defaultdict(list)
+operation_times["insert"]	= []
+operation_times["delete"]	= []
+operation_times["find"]		= []
+operation_times["update"]	= []
 
-operation_times		= defaultdict(list)
-failed_operations	= dict()
 system_info			= ""
 operations_done		= 0
 operation_lock		= Lock()
@@ -74,7 +77,7 @@ class CommandLogger(monitoring.CommandListener):
 		global operation_times
 
 		# On ne prend pas en comptes toutes les informations
-		if event.command_name not in ["delete","find","insert","update"]:
+		if event.command_name not in ["insert","delete","find","update"]:
 			return
 
 		# On récupère le temps de l'opération
@@ -227,6 +230,7 @@ class MongoDB:
 				self.logger.error(f"MongoDB.create_indexes : No index created among {fields}")
 		except Exception as e:
 			self.logger.error(f"MongoDB.create_indexes : Error creating indexes -> {e}")
+			raise Exception(f"MongoDB.create_indexes : Error creating indexes")
 
 	def drop_indexes(self):
 		"""
@@ -417,41 +421,32 @@ def print_system_info():
 		system_info = f"Python : {python_version()}\nSystem : {system()} {release()}\nMachine : {machine()} {architecture()[0]}\nCPU : {get_cpu_info()['brand_raw']} - {cpu_count(logical=False)} cores - {cpu_count(logical=True)} threads\nRAM : {int(virtual_memory().total/1024**3)} Go"
 	print(system_info)
 
-def print_failed_operations():
-	"""
-	Display failed operations
-	"""
-	global failed_operations
-	if failed_operations != {}:
-		print("Failed operations :")
-		for operation in failed_operations:
-			print(f"\t-Operation : {operation}")
-			for query,message in failed_operations[operation]:
-				print(f"\t\t**Query : {query}")
-				print(f"\t\t**Message : {message}")
-
-	failed_operations.clear()
-
 def violin_plot_operation_times(test_type="test",test_name=""):
 	"""
 	Plot the times of the operations
 	"""
-	global operation_times
+	global operation_times, operation_lock
+ 
+	if len(operation_times) == 0:
+		print(f" {test_type} : {test_name} -> No data to plot")
+		return
+ 
+	# Réveille le thread de progression
+	with operation_lock:
+		operation_Event.set()
+	
+	change_progression_text(f"Generating plots for {test_type}/{test_name} ...")
 	
 	# On crée un dossier pour les graphiques
-	makedirs(f"plots/MongoDB/{test_type}/{test_name}", exist_ok=True)
+	makedirs(f"plots/MongoDB/{test_type}", exist_ok=True)
  
-	# On va créer un graphique pour chaque opération, on affiche que l'opération courante
+	# On va créer un graphique regroupant les 4 opérations : insertion, lecture, mise à jour et suppression
+	fig, axes = plt.subplots(2,2,figsize=(12, 8))
+	axes = axes.flatten()
+	idx = 0
 	for operation in operation_times:
-
-		if isinstance(operation_times[operation],list):
-			data = operation_times[operation]
-		else:
-			data = [operation_times[operation]]
-	
-
-		# Création d'un modèle de graphique
-		fig, ax = plt.subplots(figsize=(10, 6))
+		ax = axes[idx]
+		data = operation_times[operation]
 
 		# Création du graphe violon
 		violin_parts = ax.violinplot(data,  showmeans=True, showmedians=True, showextrema= False, quantiles=[0.25,0.75],points=len(data))
@@ -468,17 +463,16 @@ def violin_plot_operation_times(test_type="test",test_name=""):
 		q3		= percentile(data, 75)
 		median	= np_median(data)
 		mean	= np_mean(data)
+		std 	= np_std(data)
 		
-
 		# Ajout du nuage de points 
 		x = normal(loc=1, scale=0.05, size=len(data))  # Ajout de jitter pour éviter l'empilement
 		y = data
 		ax.scatter(x, y, alpha=0.4, color="teal" , s=2, label=f"Nuage de points")
 
-
 		# Personnalisation des lignes
 		violin_parts['cmedians'].set_color('green')  # Ligne médiane
-		violin_parts['cmeans'].set_color('purple')  # Ligne moyenne
+		violin_parts['cmeans'].set_color('red')  # Ligne moyenne
 		violin_parts['cmeans'].set_linestyle('dashed')  # Moyenne en pointillés
 		violin_parts['bodies'][0].set_label('Densité')  # Légende pour la densité
 		violin_parts['cquantiles'].set_color('blue')  # Changer la couleur des lignes de quantiles
@@ -487,81 +481,98 @@ def violin_plot_operation_times(test_type="test",test_name=""):
 		# Légende
 		legend_elements = [
 			Patch(facecolor='#9999FF', alpha=0.7, label='Densité'),
-			Line2D([0], [0], color='green'	, label=f'Médiane : {median:.2f}'),
-			Line2D([0], [0], color='purple'	, label=f'Moyenne : {mean:.2f}'),
-			Line2D([0], [0], color='blue'	, label=f'Quartiles 1 (25%) : {q1:.2f}'),
-			Line2D([0], [0], color='blue'	, label=f'Quartiles 3 (75%) : {q3:.2f}'),
+			Line2D([0], [0], color='green'	, label=f'Médiane : {median:.2f} (µs)'),
+			Line2D([0], [0], color='red'	, label=f'Moyenne : {mean:.2f} +/- {std:.2f} écart (µs)'),
+			Line2D([0], [0], color='blue'	, label=f'Quartiles (25%) : {q1:.2f}'),
+			Line2D([0], [0], color='blue'	, label=f'Quartiles (75%) : {q3:.2f}'),
 			Line2D([0], [0], marker='o'		, color='w', markerfacecolor='teal', markersize=4, label='Nuage de points'),
 		]
-		ax.legend(handles=legend_elements, loc='upper right', title=f"{test_name} - {operation}")
+		ax.legend(handles=legend_elements, loc='best')
 
 		# Ajout des labels et du titre
-		ax.set_title(f"Temps mesuré pour réaliser l'opération: {operation}")
+		ax.set_title(f"Distribution du temps de réalisation pour {len(data)} opération: {operation}")
 		ax.set_ylabel("Temps (µs)")
 
-		if path.exists(f"plots/MongoDB/{test_type}/{test_name}/{operation}.png"):
-			remove(f"plots/MongoDB/{test_type}/{test_name}/{operation}.png")
-		plt.savefig(f"plots/MongoDB/{test_type}/{test_name}/{operation}.png")
+		idx += 1
+  
+	# Ajuster l'espace entre les sous-graphes
+	plt.tight_layout()
 
-		# On réinitialise le graphique
-		plt.clf()
+	# On sauvegarde la figure, au cas où elle existe déjà, on la supprime
+	save_path = f"plots/MongoDB/{test_type}/{test_name}.png"
+	if path.exists(save_path):
+		remove(save_path)
+	plt.savefig(save_path)
 
-		# on ferme la figure
-		plt.close()	
+	# on ferme la figure
+	plt.close()	
 
 def plot_operation_times( data : dict, steps, test_type="test",test_name=""):
 	"""
 		Affiche le temps des opérations selon la quantité de données dans la base de données
 	"""
+ 
+	change_progression_text(f"Generating plots for {test_type}/{test_name} ...")
+ 
+	if len(data) == 0:
+		print(f" {test_type} : {test_name} -> No data to plot")
+		return
 
 	# On crée un dossier pour les graphiques
-	makedirs(f"plots/MongoDB/{test_type}/{test_name}", exist_ok=True)
+	makedirs(f"plots/MongoDB/{test_type}/", exist_ok=True)
 	
-	# On va créer un graphique pour chaque opération, on affiche que l'opération courante
+	# On va créer un graphique qui contient les 4 opérations : insertion, lecture, mise à jour et suppression en même temps
+	fig, axes	= plt.subplots(2, 2, figsize=(12, 8))
+	axes		= axes.flatten() 
+	idx			= 0
 	for operation in data:
-		
+		ax = axes[idx]
+  
 		# Calcul des stats : médiane, moyenne et quartiles		
-		moyenne	= np_mean(data[operation])
-		mediane	= np_median(data[operation])
+		moyenne	= np_mean	(data[operation])
+		mediane	= np_median	(data[operation])
+		std 	= np_std	(data[operation])
 		q1		= percentile(data[operation], 25)
 		q3		= percentile(data[operation], 75)
 
 		# On affiche le temps moyen en µs en fonction de la quantité de données
-		plt.plot(steps,data[operation], label=f"{operation} : µs" )
+		ax.plot(steps,data[operation], label=f"{operation} : µs" )
 	
 		# On trace les lignes de moyenne, médiane et quartiles
-		plt.axhline(y=moyenne, color='r', linestyle='--', label=f'Moyenne : {moyenne:.2f} µs')
-		plt.axhline(y=mediane, color='g', linestyle='--', label=f'Médiane : {mediane:.2f} µs')
-		plt.axhline(y=q1, color='b', linestyle='--', label=f'Quartiles 1 (25%) : {q1:.2f} µs')
-		plt.axhline(y=q3, color='b', linestyle='--', label=f'Quartiles 3 (75%) : {q3:.2f} µs')
+		ax.axhline(y=moyenne,	color='r', linestyle='--')
+		ax.axhline(y=mediane,	color='g', linestyle='--')
+		ax.axhline(y=q1,		color='b', linestyle='--')
+		ax.axhline(y=q3,		color='b', linestyle='--')
   
 		# on ajoute dans la légende les couleurs des lignes et les labels
 		legend_elements = [
-			Line2D([0], [0], color='r', linestyle='--', label=f'Moyenne : {moyenne:.2f} µs'),
-			Line2D([0], [0], color='g', linestyle='--', label=f'Médiane : {mediane:.2f} µs'),
-			Line2D([0], [0], color='b', linestyle='--', label=f'Quartiles 1 (25%) : {q1:.2f} µs'),
-			Line2D([0], [0], color='b', linestyle='--', label=f'Quartiles 3 (75%) : {q3:.2f} µs'),
+			Line2D([0], [0], color='r', linestyle='--', label=f'Moyenne : {moyenne:.2f} +/- {std:.2f} écart (µs)'),
+			Line2D([0], [0], color='g', linestyle='--', label=f'Médiane : {mediane:.2f} (µs)'),
+			Line2D([0], [0], color='b', linestyle='--', label=f'Quartiles 1 (25%) : {q1:.2f} (µs)'),
+			Line2D([0], [0], color='b', linestyle='--', label=f'Quartiles 3 (75%) : {q3:.2f} (µs)'),
 		]
 		
 		# Personnalisation du graphique
-		plt.title(f"{operation} : Temps d'execution en fonction de la quantité de données")
-		plt.xlabel("Données dans la base de données")
-		plt.ylabel('Time (µs)')
-		plt.legend(handles=legend_elements, loc='best' )
-
-		# On sauvegarde la figure
-		if path.exists(f"plots/MongoDB/{test_type}/{test_name}/{operation}.png"):
-			remove(f"plots/MongoDB/{test_type}/{test_name}/{operation}.png")
-		plt.savefig(f"plots/MongoDB/{test_type}/{test_name}/{operation}.png")
-	
-		# On réinitialise le graphique
-		plt.clf()
+		ax.set_title(f"{operation} : Temps d'execution par quantité de données initiales")
+		ax.set_xlabel("Données dans la base de données")
+		ax.set_ylabel('Time (µs)')
+		ax.legend(handles=legend_elements, loc='best' )
   
-		# on ferme la figure
-		plt.close()
-	
-	if len(data) == 0:
-		print("No data to plot")
+		idx += 1
+  
+	# Ajuster l'espace entre les sous-graphes
+	plt.tight_layout()
+
+	# On sauvegarde la figure, au cas où elle existe déjà, on la supprime
+	save_path = f"plots/MongoDB/{test_type}/{test_name}.png"
+	if path.exists(save_path):
+		remove(save_path)
+	plt.savefig(save_path)
+
+	# On réinitialise le graphique
+	#plt.clf()
+	# on ferme la figure
+	plt.close()
 
 
 ######### Tests de performance #########
@@ -616,7 +627,7 @@ def global_test_one(mongo: MongoDB,plot_name :str ,  nb_data:int = num_records):
 					new_values = {key: modified[key]}
 					break
 			mongo.update_one(update[0],{ "$set": new_values})
-			
+		
 
 	## Test de suppression de données
 	mongo.logger.debug("Test delete one by one : ")
@@ -629,9 +640,6 @@ def global_test_one(mongo: MongoDB,plot_name :str ,  nb_data:int = num_records):
 	except Exception as e:
 		mongo.logger.error(f"global_test_one : error plotting -> {e}")
 
-	
-	# Afficher les opérations qui ont échoué
-	#print_failed_operations()
  
 	# On supprime toutes les données de la collection
 	mongo.drop_all()	
@@ -696,8 +704,6 @@ def global_test_many(mongo: MongoDB,plot_name :str, nb_data:int = num_records):
 	except Exception as e:
 		mongo.logger.error(f"global_test_many : error plotting -> {e}")
 	
-	# Afficher les opérations qui ont échoué
-	#print_failed_operations()
  
 	# On supprime toutes les données de la collection
 	mongo.drop_all()
@@ -889,11 +895,11 @@ def test_indexed(mongo: MongoDB,plot_name :str, test_function,**kwargs):
 	except Exception as e:
 		mongo.logger.error(f"Error creating indexes : {e}")
 
-	# On crée les index
+	# On crée les index et si cela échoue, une exception est levée et le test s'arrête
 	mongo.create_indexes(indexes)
 	
 	# on va faire les mêmes tests que précédemment
-	test_function(mongo,plot_name,**kwargs)
+	test_function(mongo,plot_name+"_indexed",**kwargs)
 
 def run_tests(mongo: MongoDB, type_test:str, steps=arange(1000,num_records,num_records/10000)):
 	
@@ -902,65 +908,79 @@ def run_tests(mongo: MongoDB, type_test:str, steps=arange(1000,num_records,num_r
 
 	# Supprimer les index si existants
 	mongo.drop_indexes()
+	
+	mongo.logger.info(f"Running tests for {type_test}...")
 
 	# Without indexes tests
-	#try:
-	#	print_progress.text = "Running "+type_test + "_global_one..."
-	#	global_test_one(mongo, type_test)
-	#except Exception as e:
-	#	mongo.logger.error(f"Error with global_test_one : {e}")
-#
-	#try:
-	#	print_progress.text = "Running"+type_test + "_global_many..."
-	#	global_test_many(mongo, type_test)
-	#except Exception as e:
-	#	mongo.logger.error(f"Error with global_test_many : {e}")
-#
-	#try:
-	#	print_progress.text = "Running "+type_test + "_various_one..."
-	#	test_one_various_data(mongo, type_test,steps=steps)
-	#except Exception as e:
-	#	mongo.logger.error(f"Error with test_one_various_data : {e}")
-#
-	#try:
-	#	print_progress.text = "Running "+type_test + "_various_many..."
-	#	test_many_various_data(mongo, type_test,steps=steps)
-	#except Exception as e:
-	#	mongo.logger.error(f"Error with test_many_various_data : {e}")
-#
+	try:
+		change_progression_text("Running "+type_test + "_global_one...")
+		global_test_one(mongo, type_test)
+	except Exception as e:
+		mongo.logger.error(f"Error with global_test_one : {e}")
+
+	try:
+		change_progression_text("Running "+type_test + "_global_many...")
+		global_test_many(mongo, type_test)
+	except Exception as e:
+		mongo.logger.error(f"Error with global_test_many : {e}")
+
+	try:
+		change_progression_text("Running "+type_test + "_various_one...")
+		test_one_various_data(mongo, type_test,steps=steps)
+	except Exception as e:
+		mongo.logger.error(f"Error with test_one_various_data : {e}")
+
+	try:
+		change_progression_text("Running "+type_test + "_various_many...")
+		test_many_various_data(mongo, type_test,steps=steps)
+	except Exception as e:
+		mongo.logger.error(f"Error with test_many_various_data : {e}")
+
 	# With indexes tests
 	try:
-		print_progress.text = "Running "+type_test + "_global_one_indexed..."
+		change_progression_text("Running "+type_test + "_global_one_indexed...")
 		test_indexed(mongo, type_test, global_test_one)
 	except Exception as e:
 		mongo.logger.error(f"Error with global_test_one_indexed : {e}")
 
 	try:
-		print_progress.text = "Running "+type_test + "_global_many_indexed..."
-		test_indexed(mongo, type_test + "_indexed", global_test_many)
+		change_progression_text("Running "+type_test + "_global_many_indexed...")
+		test_indexed(mongo, type_test, global_test_many)
 	except Exception as e:
 		mongo.logger.error(f"Error with global_test_many_indexed : {e}")
 
 	try:
-		print_progress.text = "Running "+type_test + "_various_one_indexed..."
-		test_indexed(mongo, type_test + "_indexed", test_one_various_data,steps=steps)
+		change_progression_text("Running "+type_test + "_various_one_indexed...")
+		test_indexed(mongo, type_test, test_one_various_data,steps=steps)
 	except Exception as e:
 		mongo.logger.error(f"Error with test_one_various_data_indexed : {e}")
 
 	try:
-		print_progress.text = "Running "+type_test + "_various_many_indexed..."
-		test_indexed(mongo, type_test + "_indexed", test_many_various_data,steps=steps)
+		change_progression_text("Running "+type_test + "_various_many_indexed...")
+		test_indexed(mongo, type_test, test_many_various_data,steps=steps)
 	except Exception as e:
 		mongo.logger.error(f"Error with test_many_various_data_indexed : {e}")
 
+	mongo.logger.info(f"Tests for {type_test} done !")
 
+
+def change_progression_text(text:str):
+	"""
+	Change the text of the progression bar
+	"""
+	global operation_lock,operation_Event
+	with operation_lock:
+		print_progress.text = text
+		operation_Event.clear()
+		operation_Event.set()
 
 def print_progress(total,text="Running tests..."):
 	global operations_done, operation_Event, operation_lock
+	print_progress.run = True
  
 	with alive_bar(total=total,manual=True) as bar:
 		bar.text(text)
-		print_progress.run = True
+		
 		# Attendre operation_Event
 		while operations_done < total and print_progress.run:
 			operation_Event.wait()
@@ -975,6 +995,26 @@ def print_progress(total,text="Running tests..."):
 print_progress.run		= True
 print_progress.text		="Running tests..."
 
+
+def clean_exit(progress_T:Thread, mysql_clients: list[MongoDB | None] | None = None):
+	"""
+		Arrête le thread et attend sa fin
+	"""
+	if mysql_clients is not None:
+		for mysql in mysql_clients:
+			if mysql is not None:
+				mysql.close()
+ 
+	if progress_T is not None:
+		# On arrête le thread
+		with operation_lock:
+			print_progress.run = False
+			operation_Event.clear()
+			operation_Event.set()
+		progress_T.join(timeout=3)
+	else:
+		print("End of tests")
+		exit(0)
 
 if __name__ == "__main__":
 
@@ -1024,14 +1064,20 @@ if __name__ == "__main__":
 
 	# On multiplie par le nombre de tests
 	total *= coeff
-	
 
-	print("Running tests ...")
-	progress_T = Thread(target=print_progress, args=((total,)) )
-	progress_T.start()
-	
 	# On crée les instances de MongoDB
 	mongo_standalone, mongo_replica, mongo_sharded =  None, None, None
+
+	# On crée un thread pour afficher la progression
+	progress_T = Thread(target=print_progress, args=((total,)) )
+	
+	# On intercepte les signaux pour arrêter proprement le thread
+	signal(SIGINT, lambda sig, frame: clean_exit(progress_T, [mongo_standalone, mongo_replica, mongo_sharded]))
+	signal(SIGTERM, lambda sig, frame: clean_exit(progress_T, [mongo_standalone, mongo_replica, mongo_sharded]))
+ 
+	# On démarre le thread de progression
+	print("Running tests ...")
+	progress_T.start()
 	
 	# On définit le niveau de log
 	debug_level = DEBUG if args.verbose else INFO
@@ -1043,52 +1089,43 @@ if __name__ == "__main__":
   
 	if args.standalone or args.all:
 		try:
-
 			mongo_standalone = MongoDB(debug_level=debug_level,debug_file_mode=alone_dbg_mode)
-			print_progress.text = "Tests en mode standalone..."
+			change_progression_text("Tests en mode standalone...")
 			run_tests(mongo_standalone, "standalone" ,steps=steps)
-
 		except Exception as e:
 			print(f"Erreur avec le test en standalone: {e}")
-   
 		finally:
 			if mongo_standalone is not None:
-				del mongo_standalone
+				mongo_standalone.close()
 	
 	if args.replica or args.all:
 		try:
-
 			mongo_replica = MongoDB(using_replica_set=True,debug_level=debug_level,debug_file_mode=alone_dbg_mode)
-			print_progress.text = "Tests en mode Replica..."
+			change_progression_text("Tests en mode Replica...")
 			run_tests(mongo_replica, "replica_set", steps=steps)
-
 		except Exception as e:
-
 			print(f"Erreur avec le test avec Replica Set: {e}")
-
 		finally:
-
 			if mongo_replica is not None:
 				del mongo_replica
 
 	if args.sharded or args.all:
 		try:
-
 			mongo_sharded = MongoDB(using_sharded_cluster=True,debug_level=debug_level,debug_file_mode=alone_dbg_mode)
-			print_progress.text = "Tests en mode Sharded..."
+			change_progression_text("Tests en mode Sharded...")
 			run_tests(mongo_sharded, "sharding", steps=steps)
-
 		except Exception as e:
-
 			print(f"Erreur avec le test avec Shards: {e}")
-
 		finally:
 			if mongo_sharded is not None:
 				del mongo_sharded
 
-	# On finit le thread de progressions
-	print_progress.run = False
-	operation_Event.set()
+	# On finit le thread de progression
+	with operation_lock:
+		print_progress.run = False
+		operation_Event.clear()
+		operation_Event.set()
+
 	progress_T.join(timeout=3)
 	
 	print("End of tests !")

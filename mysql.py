@@ -3,12 +3,15 @@ from os import getenv, makedirs, path, remove
 from dotenv import load_dotenv
 from argparse import ArgumentParser
 
+# For handling signals
+from signal import signal, SIGINT, SIGTERM
+
 import pymysql
 from time import perf_counter_ns as time_ns
 from collections import defaultdict
 
 # For statistics
-from numpy import arange, median as np_median, mean as np_mean, percentile
+from numpy import arange, median as np_median, mean as np_mean, std as np_std ,percentile
 from numpy.random import normal
 
 # For generating data and handling data
@@ -37,7 +40,6 @@ from threading import Thread, Lock, Event
 
 
 operation_times		= defaultdict(list)
-failed_operations	= defaultdict(list)
 system_info			= ""
 operations_done		= 0
 operation_lock		= Lock()
@@ -524,37 +526,32 @@ def print_system_info():
 		system_info = f"Python : {python_version()}\nSystem : {system()} {release()}\nMachine : {machine()} {architecture()[0]}\nCPU : {get_cpu_info()['brand_raw']} - {cpu_count(logical=False)} cores - {cpu_count(logical=True)} threads\nRAM : {int(virtual_memory().total/1024**3)} Go"
 	print(system_info)
 
-def print_failed_operations():
-	"""
-	Display failed operations
-	"""
-	global failed_operations
-	if failed_operations != {}:
-		print("Failed operations :")
-		for operation in failed_operations:
-			print(f"\t-Operation : {operation}")
-			for query,message in failed_operations[operation]:
-				print(f"\t\t**Query : {query}")
-				print(f"\t\t**Message : {message}")
-
-	failed_operations.clear()
-
 def violin_plot_operation_times(test_type="test",test_name=""):
 	"""
 	Plot the times of the operations
 	"""
 	global operation_times
 	
-	# On crée un dossier pour les graphiques
-	makedirs(f"plots/MySQL/{test_type}/{test_name}", exist_ok=True)
+	if len(operation_times) == 0:
+		print(f" {test_type} : {test_name} -> No data to plot")
+		return
  
-	# On va créer un graphique pour chaque opération, on affiche que l'opération courante
+	# Réveille le thread de progression
+	with operation_lock:
+		operation_Event.set()
+	
+	change_progression_text(f"Generating plots for {test_type}/{test_name} ...")
+	
+	# On crée un dossier pour les graphiques
+	makedirs(f"plots/MySQL/{test_type}", exist_ok=True)
+ 
+	# On va créer un graphique regroupant les 4 opérations : insertion, lecture, mise à jour et suppression
+	fig, axes = plt.subplots(2,2,figsize=(12, 8))
+	axes = axes.flatten()
+	idx = 0
 	for operation in operation_times:
-
+		ax = axes[idx]
 		data = operation_times[operation]
-
-		# Création d'un modèle de graphique
-		fig, ax = plt.subplots(figsize=(10, 6))
 
 		# Création du graphe violon
 		violin_parts = ax.violinplot(data,  showmeans=True, showmedians=True, showextrema= False, quantiles=[0.25,0.75],points=len(data))
@@ -571,17 +568,16 @@ def violin_plot_operation_times(test_type="test",test_name=""):
 		q3		= percentile(data, 75)
 		median	= np_median(data)
 		mean	= np_mean(data)
+		std 	= np_std(data)
 		
-
 		# Ajout du nuage de points 
 		x = normal(loc=1, scale=0.05, size=len(data))  # Ajout de jitter pour éviter l'empilement
 		y = data
 		ax.scatter(x, y, alpha=0.4, color="teal" , s=2, label=f"Nuage de points")
 
-
 		# Personnalisation des lignes
 		violin_parts['cmedians'].set_color('green')  # Ligne médiane
-		violin_parts['cmeans'].set_color('purple')  # Ligne moyenne
+		violin_parts['cmeans'].set_color('red')  # Ligne moyenne
 		violin_parts['cmeans'].set_linestyle('dashed')  # Moyenne en pointillés
 		violin_parts['bodies'][0].set_label('Densité')  # Légende pour la densité
 		violin_parts['cquantiles'].set_color('blue')  # Changer la couleur des lignes de quantiles
@@ -590,81 +586,96 @@ def violin_plot_operation_times(test_type="test",test_name=""):
 		# Légende
 		legend_elements = [
 			Patch(facecolor='#9999FF', alpha=0.7, label='Densité'),
-			Line2D([0], [0], color='green'	, label=f'Médiane : {median:.2f}'),
-			Line2D([0], [0], color='purple'	, label=f'Moyenne : {mean:.2f}'),
-			Line2D([0], [0], color='blue'	, label=f'Quartiles 1 (25%) : {q1:.2f}'),
-			Line2D([0], [0], color='blue'	, label=f'Quartiles 3 (75%) : {q3:.2f}'),
+			Line2D([0], [0], color='green'	, label=f'Médiane : {median:.2f} (µs)'),
+			Line2D([0], [0], color='red'	, label=f'Moyenne : {mean:.2f} +/- {std:.2f} écart (µs)'),
+			Line2D([0], [0], color='blue'	, label=f'Quartiles (25%) : {q1:.2f}'),
+			Line2D([0], [0], color='blue'	, label=f'Quartiles (75%) : {q3:.2f}'),
 			Line2D([0], [0], marker='o'		, color='w', markerfacecolor='teal', markersize=4, label='Nuage de points'),
 		]
-		ax.legend(handles=legend_elements, loc='upper right', title=f"{test_name} - {operation}")
+		ax.legend(handles=legend_elements, loc='best')
 
 		# Ajout des labels et du titre
-		ax.set_title(f"Temps mesuré pour {operation}")
+		ax.set_title(f"Distribution du temps de réalisation pour {len(data)} opération: {operation}")
 		ax.set_ylabel("Temps (µs)")
-  
-		# On sauvegarde la figure
-		if path.exists(f"plots/MySQL/{test_type}/{test_name}/{operation}.png"):
-			remove(f"plots/MySQL/{test_type}/{test_name}/{operation}.png")
-		plt.savefig(f"plots/MySQL/{test_type}/{test_name}/{operation}.png")
 
-		# On réinitialise le graphique
-		plt.clf()
+		idx += 1
   
-		# on ferme la figure
-		plt.close()
+	# Ajuster l'espace entre les sous-graphes
+	plt.tight_layout()
+
+	# On sauvegarde la figure, au cas où elle existe déjà, on la supprime
+	save_path = f"plots/MySQL/{test_type}/{test_name}.png"
+	if path.exists(save_path):
+		remove(save_path)
+	plt.savefig(save_path)
+
+	# on ferme la figure
+	plt.close()	
 
 def plot_operation_times( data:dict,step,test_type="test",test_name=""):
 	"""
 		Affiche le temps des opérations selon la quantité de données dans la base de données
 	"""
 
+	if len(data) == 0:
+		print(f" {test_type} : {test_name} -> No data to plot")
+		return
+
 	# On crée un dossier pour les graphiques
-	makedirs(f"plots/MySQL/{test_type}/{test_name}", exist_ok=True)
+	makedirs(f"plots/MongoDB/{test_type}/", exist_ok=True)
 	
-	# On va créer un graphique pour chaque opération, on affiche que l'opération courante
+	# On va créer un graphique qui contient les 4 opérations : insertion, lecture, mise à jour et suppression en même temps
+	fig, axes	= plt.subplots(2, 2, figsize=(12, 8))
+	axes		= axes.flatten() 
+	idx			= 0
 	for operation in data:
-		
+		ax = axes[idx]
+  
 		# Calcul des stats : médiane, moyenne et quartiles		
-		moyenne	= np_mean(data[operation])
-		mediane	= np_median(data[operation])
+		moyenne	= np_mean	(data[operation])
+		mediane	= np_median	(data[operation])
+		std 	= np_std	(data[operation])
 		q1		= percentile(data[operation], 25)
 		q3		= percentile(data[operation], 75)
 
 		# On affiche le temps moyen en µs en fonction de la quantité de données
-		plt.plot(steps,data[operation], label=f"{operation} : µs" )
+		ax.plot(steps,data[operation], label=f"{operation} : µs" )
 	
 		# On trace les lignes de moyenne, médiane et quartiles
-		plt.axhline(y=moyenne, color='r', linestyle='--', label=f'Moyenne : {moyenne:.2f} µs')
-		plt.axhline(y=mediane, color='g', linestyle='--', label=f'Médiane : {mediane:.2f} µs')
-		plt.axhline(y=q1, color='b', linestyle='--', label=f'Quartiles 1 (25%) : {q1:.2f} µs')
-		plt.axhline(y=q3, color='b', linestyle='--', label=f'Quartiles 3 (75%) : {q3:.2f} µs')
+		ax.axhline(y=moyenne,	color='r', linestyle='--')
+		ax.axhline(y=mediane,	color='g', linestyle='--')
+		ax.axhline(y=q1,		color='b', linestyle='--')
+		ax.axhline(y=q3,		color='b', linestyle='--')
   
 		# on ajoute dans la légende les couleurs des lignes et les labels
 		legend_elements = [
-			Line2D([0], [0], color='r', linestyle='--', label=f'Moyenne : {moyenne:.2f} µs'),
-			Line2D([0], [0], color='g', linestyle='--', label=f'Médiane : {mediane:.2f} µs'),
-			Line2D([0], [0], color='b', linestyle='--', label=f'Quartiles 1 (25%) : {q1:.2f} µs'),
-			Line2D([0], [0], color='b', linestyle='--', label=f'Quartiles 3 (75%) : {q3:.2f} µs'),
+			Line2D([0], [0], color='r', linestyle='--', label=f'Moyenne : {moyenne:.2f} +/- {std:.2f} écart (µs)'),
+			Line2D([0], [0], color='g', linestyle='--', label=f'Médiane : {mediane:.2f} (µs)'),
+			Line2D([0], [0], color='b', linestyle='--', label=f'Quartiles 1 (25%) : {q1:.2f} (µs)'),
+			Line2D([0], [0], color='b', linestyle='--', label=f'Quartiles 3 (75%) : {q3:.2f} (µs)'),
 		]
 		
 		# Personnalisation du graphique
-		plt.title(f"{operation} : Temps d'execution en fonction de la quantité de données")
-		plt.xlabel("Données dans la base de données")
-		plt.ylabel('Time (µs)')
-		plt.legend(handles=legend_elements, loc='best' )
-		# On sauvegarde la figure
-		if path.exists(f"plots/MySQL/{test_type}/{test_name}/{operation}.png"):
-			remove(f"plots/MySQL/{test_type}/{test_name}/{operation}.png")
-		plt.savefig(f"plots/MySQL/{test_type}/{test_name}/{operation}.png")
-
-		# On réinitialise le graphique
-		plt.clf()
+		ax.set_title(f"{operation} : Temps d'execution par quantité de données initiales")
+		ax.set_xlabel("Données dans la base de données")
+		ax.set_ylabel('Time (µs)')
+		ax.legend(handles=legend_elements, loc='best' )
   
-		# on ferme la figure
-		plt.close()
-	
-	if len(data) == 0:
-		print("No data to plot")
+		idx += 1
+  
+	# Ajuster l'espace entre les sous-graphes
+	plt.tight_layout()
+
+	# On sauvegarde la figure, au cas où elle existe déjà, on la supprime
+	save_path = f"plots/MySQL/{test_type}/{test_name}.png"
+	if path.exists(save_path):
+		remove(save_path)
+	plt.savefig(save_path)
+
+	# On réinitialise le graphique
+	#plt.clf()
+	# on ferme la figure
+	plt.close()
 
 
 ######### Tests de performance #########
@@ -712,14 +723,7 @@ def global_test_one(mysql: MySQL,plot_name :str ,  nb_data:int = num_records):
 		if original == modified:
 			mysql.logger.error(f"Data are the same : \n\t{original} -> \n\t{modified}")
 		else:
-			#Sinon on identifie le champ modifié
-			new_values = {}
-			key = ""
-			for key in original:
-				if original[key] != modified[key]:
-					new_values = {key: modified[key]}
-					break
-			mysql.update_one(update[0], new_values)
+			mysql.update_one(update[0], modified)
 			
 
 	## Test de suppression de données
@@ -734,9 +738,6 @@ def global_test_one(mysql: MySQL,plot_name :str ,  nb_data:int = num_records):
 		mysql.logger.error(f"global_test_one : error plotting -> {e}")
 
 	
-	# Afficher les opérations qui ont échoué
-	#print_failed_operations()
- 
 	# On supprime toutes les données de la collection
 	mysql.drop_all()	
  
@@ -746,7 +747,7 @@ def global_test_one(mysql: MySQL,plot_name :str ,  nb_data:int = num_records):
 def global_test_many(mysql: MySQL,plot_name :str, nb_data:int = num_records):
 	global updated_file, generated_file, num_records_per_many, num_records, operation_times
 
-	mysql.logger.info("Test global many" + plot_name)
+	mysql.logger.info("Test global many " + plot_name)
 
 	### Tests avec plusieurs données à la fois  ###
 	
@@ -803,9 +804,7 @@ def global_test_many(mysql: MySQL,plot_name :str, nb_data:int = num_records):
 	except Exception as e:
 		mysql.logger.error(f"global_test_many : error plotting -> {e}")
 	
-	# Afficher les opérations qui ont échoué
-	#print_failed_operations()
- 
+
 	# On supprime toutes les données de la collection
 	mysql.drop_all()
  
@@ -985,7 +984,7 @@ def test_indexed(mysql: MySQL,plot_name :str, test_function,**kwargs):
 	mysql.create_indexes(indexes)
 	
 	# on va faire les mêmes tests que précédemment
-	test_function(mysql,plot_name,**kwargs)
+	test_function(mysql,plot_name+"_indexed",**kwargs)
 
 def run_tests(mysql: MySQL, type_test:str, steps=arange(1000,num_records,num_records/10000)):
 	
@@ -997,61 +996,73 @@ def run_tests(mysql: MySQL, type_test:str, steps=arange(1000,num_records,num_rec
 
 	# Without indexes tests
 	try:
-		print_progress.text = "Running "+type_test + "_global_one..."
+		change_progression_text("Running "+type_test + "_global_one...")
 		global_test_one(mysql, type_test)
 	except Exception as e:
 		mysql.logger.error(f"Error with global_test_one : {e}")
 
 	try:
-		print_progress.text = "Running"+type_test + "_global_many..."
+		change_progression_text("Running "+type_test + "_global_many...")
 		global_test_many(mysql, type_test)
 	except Exception as e:
 		mysql.logger.error(f"Error with global_test_many : {e}")
 
 	try:
-		print_progress.text = "Running "+type_test + "_various_one..."
+		change_progression_text("Running "+type_test + "_various_one...")
 		test_one_various_data(mysql, type_test,steps=steps)
 	except Exception as e:
 		mysql.logger.error(f"Error with test_one_various_data : {e}")
 
 	try:
-		print_progress.text = "Running "+type_test + "_various_many..."
+		change_progression_text("Running "+type_test + "_various_many...")
 		test_many_various_data(mysql, type_test,steps=steps)
 	except Exception as e:
 		mysql.logger.error(f"Error with test_many_various_data : {e}")
 
 	# With indexes tests
 	try:
-		print_progress.text = "Running "+type_test + "_global_one_indexed..."
+		change_progression_text("Running "+type_test + "_global_one_indexed...")
 		test_indexed(mysql, type_test, global_test_one)
 	except Exception as e:
 		mysql.logger.error(f"Error with global_test_one_indexed : {e}")
 
 	try:
-		print_progress.text = "Running "+type_test + "_global_many_indexed..."
-		test_indexed(mysql, type_test + "_indexed", global_test_many)
+		change_progression_text("Running "+type_test + "_global_many_indexed...")
+		test_indexed(mysql, type_test, global_test_many)
 	except Exception as e:
 		mysql.logger.error(f"Error with global_test_many_indexed : {e}")
 
 	try:
-		print_progress.text = "Running "+type_test + "_various_one_indexed..."
-		test_indexed(mysql, type_test + "_indexed", test_one_various_data,steps=steps)
+		change_progression_text("Running "+type_test + "_various_one_indexed...")
+		test_indexed(mysql, type_test, test_one_various_data,steps=steps)
 	except Exception as e:
 		mysql.logger.error(f"Error with test_one_various_data_indexed : {e}")
 
 	try:
-		print_progress.text = "Running "+type_test + "_various_many_indexed..."
-		test_indexed(mysql, type_test + "_indexed", test_many_various_data,steps=steps)
+		change_progression_text("Running "+type_test + "_various_many_indexed...")
+		test_indexed(mysql, type_test, test_many_various_data,steps=steps)
 	except Exception as e:
 		mysql.logger.error(f"Error with test_many_various_data_indexed : {e}")
 
+def change_progression_text(text:str):
+	"""
+	Change the text of the progression bar
+	"""
+	global operation_lock,operation_Event
+	with operation_lock:
+		print_progress.text = text
+		operation_Event.clear()
+		operation_Event.set()
+
 
 def print_progress(total,text="Running tests..."):
-	global operations_done, operation_Event,operation_lock
+	global operations_done, operation_Event, operation_lock
  
+	print_progress.run = True
+	percent = 0	
 	with alive_bar(total=total,manual=True) as bar:
 		bar.text(text)
-		print_progress.run = True
+		
 		# Attendre operation_Event
 		while operations_done < total and print_progress.run:
 			operation_Event.wait()
@@ -1060,11 +1071,31 @@ def print_progress(total,text="Running tests..."):
 				percent = operations_done/total
 			bar(percent)
 			bar.text(print_progress.text)
-
+		
 		bar(1.)
-		bar.text(f"Operations done !")
 print_progress.run		= True
 print_progress.text		="Running tests..."
+
+
+def clean_exit(progress_T:Thread, mysql_clients: list[MySQL | None] | None = None):
+	"""
+		Arrête le thread et attend sa fin
+	"""
+	if mysql_clients is not None:
+		for mysql in mysql_clients:
+			if mysql is not None:
+				mysql.close()
+ 
+	if progress_T is not None:
+		# On arrête le thread
+		with operation_lock:
+			print_progress.run = False
+			operation_Event.clear()
+			operation_Event.set()
+		progress_T.join(timeout=3)
+	else:
+		print("End of tests")
+		exit(0)
 
 
 if __name__ == "__main__":
@@ -1114,9 +1145,17 @@ if __name__ == "__main__":
 	# On multiplie par le nombre de tests
 	total *= coeff
 	
-	print("Running tests ...")
+	# On crée un thread pour afficher la progression
 	progress_T = Thread(target=print_progress, args=((total,)) )
+	
+	# On intercepte les signaux pour arrêter proprement le programme
+	signal(SIGINT, lambda signum, frame: clean_exit(progress_T, [mysql_standalone, mysql_replica, mysql_sharded]))
+	signal(SIGTERM, lambda signum, frame: clean_exit(progress_T, [mysql_standalone, mysql_replica, mysql_sharded]))
+	
+	# On démarre le thread de progression
+	print("Running tests ...")
 	progress_T.start()
+
 	
 	# On crée les instances de MySQL
 	mysql_standalone ,mysql_replica ,mysql_sharded = None, None, None
@@ -1128,33 +1167,33 @@ if __name__ == "__main__":
 		sharded_dbg_mode = "a"
 		replica_dbg_mode = "a" if args.standalone else "w"
 
+ 
 	if args.standalone or args.all:
 		try:
-		
 			mysql_standalone = MySQL(debug_level=INFO,dbg_file_mode=alone_dbg_mode)
-			print_progress.text = "Tests en mode standalone..."
+			change_progression_text("Tests en mode standalone...")
 			run_tests(mysql_standalone, "single_instance",steps=steps)
 	
 		except Exception as e:
-		
 			print(f"Erreur avec le test en standalone: {e}")
 	
 		finally:
 			if mysql_standalone is not None:
-				del mysql_standalone
+				mysql_standalone.close()
 	
 	#if args.replica or args.all:
 	#	print("No replica set tests")
 		#try:
 		#
 		#	mysql_replica = MySQL(using_replica_set=True,debug_level=INFO,dbg_file_mode=replica_dbg_mode)
-		#	print_progress.text = "Tests en mode Replica..."
+		#	change_progression_text("Tests en mode Replica...")
 		#	run_tests(mysql_replica, "replica_set",steps=steps)
 		#	del mysql_replica
-	#
-		#except Exception as e:
 		#
+		#except Exception as e:
+		#	operation_Event.clear()
 		#	print(f"Erreur avec le test avec Replica Set: {e}")
+		#
 		#finally:
 		#
 		#	if mysql_replica is not None:
@@ -1164,21 +1203,24 @@ if __name__ == "__main__":
 		try:
 
 			mysql_sharded = MySQL(using_shard=True,debug_level=INFO,dbg_file_mode=sharded_dbg_mode)
-			print_progress.text = "Tests en mode Sharded..."
+			change_progression_text("Tests en mode Sharded...")
 			run_tests(mysql_sharded, "sharding",steps=steps)
 
 		except Exception as e:
-		
 			print(f"Erreur avec le test avec Shards: {e}")
 	
 		finally:
-		
 			if mysql_sharded is not None:
-				del mysql_sharded
+				mysql_sharded.close()
 
-	# On finit le thread de progressions
-	print_progress.run = False
-	operation_Event.set()
+	# On finit le thread de progression
+	with operation_lock:
+		print_progress.run = False
+		operation_Event.clear()
+		operation_Event.set()
+
 	progress_T.join(timeout=3)
+	progress_T = None
 	
 	print("End of tests")
+	exit(0)

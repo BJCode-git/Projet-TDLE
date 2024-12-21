@@ -10,6 +10,13 @@ services:
         - 3306:3306
       volumes:
         - mysql-data:/var/lib/mysql
+      healthcheck:
+            # On attend de pouvoir se connecter à la base de données, pas seulement la ping 
+            test:  ["CMD", "mysql", "-h", "127.0.0.1", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}", "-e", "SELECT 1;"]
+            interval: 10s
+            timeout: 5s
+            retries: 3
+            start_period: 5s
       #env_file:
       #  - .env
       environment:
@@ -285,7 +292,7 @@ services:
         interval: 10s
         timeout: 5s
         retries: 3
-        start_period: 5s
+        start_period: 10s
       ports:
         - 27017:27017
       volumes:
