@@ -1,0 +1,6 @@
+\begin{MintedVerbatim}[commandchars=\\\{\}]
+\PYG{+w}{    }\PYG{c+c1}{\PYGZsh{} Démarrage et attente de la disponibilité du serveur}
+\PYG{+w}{    }docker\PYG{+w}{ }compose\PYG{+w}{ }up\PYG{+w}{ }\PYGZhy{}\PYGZhy{}wait\PYG{+w}{ }\PYGZhy{}d\PYG{+w}{ }mysql\PYGZhy{}standalone\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}
+\PYG{+w}{    }python3\PYG{+w}{ }mysql.py\PYG{+w}{ }\PYGZhy{}\PYGZhy{}standalone\PYG{+w}{                }\PYG{o}{\PYGZam{}\PYGZam{}}
+\PYG{+w}{    }docker\PYG{+w}{ }compose\PYG{+w}{ }down\PYG{+w}{ }\PYGZhy{}v\PYG{+w}{ }\PYGZhy{}\PYGZhy{}remove\PYGZhy{}orphans
+\end{MintedVerbatim}

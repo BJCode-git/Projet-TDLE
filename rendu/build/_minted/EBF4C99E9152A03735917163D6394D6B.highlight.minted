@@ -1,0 +1,5 @@
+\begin{MintedVerbatim}[commandchars=\\\{\}]
+\PYG{+w}{    }pip3\PYG{+w}{ }install\PYG{+w}{ }\PYGZhy{}r\PYG{+w}{ }requirements/generate\PYGZus{}data\PYGZhy{}requirements.txt
+\PYG{+w}{    }pip3\PYG{+w}{ }install\PYG{+w}{ }\PYGZhy{}r\PYG{+w}{ }requirements/mongo\PYGZhy{}requirements.txt
+\PYG{+w}{    }pip3\PYG{+w}{ }install\PYG{+w}{ }\PYGZhy{}r\PYG{+w}{ }requirements/mysql\PYGZhy{}requirements.txt
+\end{MintedVerbatim}

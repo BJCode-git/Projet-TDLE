@@ -1,0 +1,4 @@
+\begin{MintedVerbatim}[commandchars=\\\{\}]
+\PYG{+w}{    }chmod\PYG{+w}{ }+x\PYG{+w}{ }start.sh\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}
+\PYG{+w}{    }./start.sh
+\end{MintedVerbatim}

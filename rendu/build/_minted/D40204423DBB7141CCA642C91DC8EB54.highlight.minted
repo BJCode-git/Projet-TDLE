@@ -1,0 +1,5 @@
+\begin{MintedVerbatim}[commandchars=\\\{\}]
+\PYG{+w}{    }docker\PYG{+w}{ }compose\PYG{+w}{ }up\PYG{+w}{ }mongo\PYGZhy{}replica\PYGZhy{}initiate\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}
+\PYG{+w}{    }python3\PYG{+w}{ }mongodb.py\PYG{+w}{ }\PYGZhy{}\PYGZhy{}replica\PYG{+w}{             }\PYG{o}{\PYGZam{}\PYGZam{}}
+\PYG{+w}{    }docker\PYG{+w}{ }compose\PYG{+w}{ }down\PYG{+w}{ }\PYGZhy{}v\PYG{+w}{ }\PYGZhy{}\PYGZhy{}remove\PYGZhy{}orphans
+\end{MintedVerbatim}

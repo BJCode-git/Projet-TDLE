@@ -1,10 +1,1 @@
-[INFO] mysql.py:132 - MySQL object created
-on 0: [INFO] mysql.py:686 - Test global one by one single_instance
-on 400: [INFO] mysql.py:750 - Test global many single_instance
-on 431: [INFO] mysql.py:820 - Test one by one with various data single_instance
-on 471: [INFO] mysql.py:896 - Test many with various data single_instance
-on 511: [INFO] mysql.py:686 - Test global one by one single_instance_indexed
-on 911: [INFO] mysql.py:750 - Test global many single_instance_indexed
-on 942: [INFO] mysql.py:820 - Test one by one with various data single_instance_indexed
-on 982: [INFO] mysql.py:896 - Test many with various data single_instance_indexed
-on 1022: [INFO] mysql.py:148 - MySQL connection closed
+

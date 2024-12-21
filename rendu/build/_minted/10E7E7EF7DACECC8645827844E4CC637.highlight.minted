@@ -1,0 +1,4 @@
+\begin{MintedVerbatim}[commandchars=\\\{\}]
+\PYG{+w}{    }pip3\PYG{+w}{ }install\PYG{+w}{ }\PYGZhy{}r\PYG{+w}{ }requirements/data\PYGZus{}generation\PYGZhy{}requirements.txt\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}
+\PYG{+w}{    }python3\PYG{+w}{ }data\PYG{l+s+se}{\PYGZbs{}\PYGZus{}}generation.py
+\end{MintedVerbatim}

@@ -1,0 +1,4 @@
+\begin{MintedVerbatim}[commandchars=\\\{\}]
+\PYG{+w}{    }git\PYG{+w}{ }clone\PYG{+w}{ }https://github.com/BJCode\PYGZhy{}git/Projet\PYGZhy{}TDLE.git\PYG{+w}{ }\PYGZhy{}b\PYG{+w}{ }main\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}
+\PYG{+w}{    }\PYG{n+nb}{cd}\PYG{+w}{ }Projet\PYGZhy{}TDLE
+\end{MintedVerbatim}

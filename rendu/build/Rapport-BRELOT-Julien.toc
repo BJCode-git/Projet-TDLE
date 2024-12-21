@@ -1,0 +1,75 @@
+
+\babel@toc {french}{}\relax 
+\hypertarget {toc}{}
+\contentsline {chapter}{\numberline {1}Introduction}{5}{chapter.1}%
+\contentsline {chapter}{\numberline {2}Contexte et Objectifs}{6}{chapter.2}%
+\contentsline {section}{\numberline {I}Systèmes Comparés}{6}{section.2.1}%
+\contentsline {subsection}{\numberline {I.1}MongoDB}{6}{subsection.2.1.1}%
+\contentsline {subsection}{\numberline {I.2}MySQL}{7}{subsection.2.1.2}%
+\contentsline {section}{\numberline {II}Étude des aspects de MongoDB}{8}{section.2.2}%
+\contentsline {subsection}{\numberline {II.1}Comparaison des Performances des Requêtes}{8}{subsection.2.2.1}%
+\contentsline {subsection}{\numberline {II.2}Performances avec et sans Indexation}{9}{subsection.2.2.2}%
+\contentsline {subsection}{\numberline {II.3}Réplication et Fragmentation}{10}{subsection.2.2.3}%
+\contentsline {paragraph}{Réplication dans MongoDB :}{10}{subsection.2.2.3}%
+\contentsline {paragraph}{Fragmentation dans MongoDB :}{10}{subsection.2.2.3}%
+\contentsline {chapter}{\numberline {3}Structure des Tests}{11}{chapter.3}%
+\contentsline {section}{\numberline {I}Architecture MongoDB}{11}{section.3.1}%
+\contentsline {subsection}{\numberline {I.1}Architecture avec serveur unique : Standalone}{11}{subsection.3.1.1}%
+\contentsline {subsection}{\numberline {I.2}Architecture avec réplications : Replica Set}{12}{subsection.3.1.2}%
+\contentsline {subsection}{\numberline {I.3}Architecture Fragmentée : shards}{13}{subsection.3.1.3}%
+\contentsline {section}{\numberline {II}Architecture MySQL}{13}{section.3.2}%
+\contentsline {subsection}{\numberline {II.1}Architecture avec serveur unique : Standalone}{13}{subsection.3.2.1}%
+\contentsline {subsection}{\numberline {II.2}Architecture Distribuée : Cluster}{13}{subsection.3.2.2}%
+\contentsline {section}{\numberline {III}Description des Tests}{14}{section.3.3}%
+\contentsline {subsection}{\numberline {III.1}Contexte}{14}{subsection.3.3.1}%
+\contentsline {subsection}{\numberline {III.2}Principe des tests}{15}{subsection.3.3.2}%
+\contentsline {subsection}{\numberline {III.3}Paramètres des tests}{16}{subsection.3.3.3}%
+\contentsline {subsection}{\numberline {III.4}Structure des Données}{16}{subsection.3.3.4}%
+\contentsline {chapter}{\numberline {4}Résultats et Analyses pour MongoDB}{17}{chapter.4}%
+\contentsline {section}{\numberline {I}MongoDB Standalone}{17}{section.4.1}%
+\contentsline {subsection}{\numberline {I.1}Performances des Opérations uniques}{17}{subsection.4.1.1}%
+\contentsline {subsubsection}{Distribution des performances des opérations CRUD uniques}{17}{subsection.4.1.1}%
+\contentsline {subsubsection}{Performances des Opérations uniques selon la quantitée de données dans la base}{18}{figure.caption.7}%
+\contentsline {subsection}{\numberline {I.2}Performances des Opérations avec données multiples}{19}{subsection.4.1.2}%
+\contentsline {subsection}{\numberline {I.3}Indexation}{20}{subsection.4.1.3}%
+\contentsline {subsubsection}{Performances des Opérations uniques}{20}{subsection.4.1.3}%
+\contentsline {subsubsection}{Performances des Opérations avec données multiples}{22}{figure.caption.12}%
+\contentsline {section}{\numberline {II}Réplication}{23}{section.4.2}%
+\contentsline {subsection}{\numberline {II.1}Performances des Opérations uniques}{23}{subsection.4.2.1}%
+\contentsline {subsection}{\numberline {II.2}Performances des Opérations avec données multiples}{24}{subsection.4.2.2}%
+\contentsline {subsection}{\numberline {II.3}Indexation}{25}{subsection.4.2.3}%
+\contentsline {subsubsection}{Performances des Opérations uniques}{25}{subsection.4.2.3}%
+\contentsline {subsubsection}{Performances des Opérations avec données multiples}{26}{figure.caption.20}%
+\contentsline {subsection}{\numberline {II.4}Observations Globales sur la Réplication}{27}{subsection.4.2.4}%
+\contentsline {section}{\numberline {III}Sharding}{28}{section.4.3}%
+\contentsline {subsection}{\numberline {III.1}Performances des Opérations uniques}{28}{subsection.4.3.1}%
+\contentsline {subsection}{\numberline {III.2}Performances des Opérations avec données multiples}{29}{subsection.4.3.2}%
+\contentsline {subsection}{\numberline {III.3}Indexation}{30}{subsection.4.3.3}%
+\contentsline {subsubsection}{Performances des Opérations uniques}{30}{subsection.4.3.3}%
+\contentsline {subsubsection}{Performances des Opérations avec données multiples}{31}{figure.caption.28}%
+\contentsline {subsection}{\numberline {III.4}Observations Globales sur la fragmentation}{32}{subsection.4.3.4}%
+\contentsline {chapter}{\numberline {5}Résultats et Analyses pour MySQL}{33}{chapter.5}%
+\contentsline {section}{\numberline {I}MySQL Standalone}{33}{section.5.1}%
+\contentsline {subsection}{\numberline {I.1}Performances des Opérations uniques}{33}{subsection.5.1.1}%
+\contentsline {subsection}{\numberline {I.2}Performances des Opérations avec données multiples}{34}{subsection.5.1.2}%
+\contentsline {subsection}{\numberline {I.3}Indexation}{35}{subsection.5.1.3}%
+\contentsline {subsubsection}{Performances des Opérations uniques}{35}{subsection.5.1.3}%
+\contentsline {subsubsection}{Performances des Opérations avec données multiples}{36}{figure.caption.36}%
+\contentsline {subsection}{\numberline {I.4}Observations Globales sur MySQL Standalone}{37}{subsection.5.1.4}%
+\contentsline {section}{\numberline {II}MySQL Cluster}{38}{section.5.2}%
+\contentsline {subsection}{\numberline {II.1}Performances des Opérations uniques}{38}{subsection.5.2.1}%
+\contentsline {subsection}{\numberline {II.2}Performances des Opérations avec données multiples}{39}{subsection.5.2.2}%
+\contentsline {subsection}{\numberline {II.3}Indexation}{40}{subsection.5.2.3}%
+\contentsline {subsubsection}{Performances des Opérations uniques}{40}{subsection.5.2.3}%
+\contentsline {subsubsection}{Performances des Opérations avec données multiples}{41}{figure.caption.44}%
+\contentsline {subsection}{\numberline {II.4}Observations Globales sur MySQL Cluster}{42}{subsection.5.2.4}%
+\contentsline {chapter}{\numberline {6}Analyse des Résultats}{43}{chapter.6}%
+\contentsline {section}{\numberline {I}Performances des Requêtes}{43}{section.6.1}%
+\contentsline {section}{\numberline {II}Impact de la Réplication et du Sharding}{44}{section.6.2}%
+\contentsline {section}{\numberline {III}Critique des résultats}{44}{section.6.3}%
+\contentsline {section}{\numberline {IV}Comparaisons et Bilan}{44}{section.6.4}%
+\contentsline {chapter}{\numberline {7}Conclusion}{46}{chapter.7}%
+\contentsline {chapter}{\numberline {A}Annexe}{47}{appendix.A}%
+\contentsline {section}{\numberline {I}Déploiement du Code}{47}{section.A.1}%
+\contentsline {subsection}{\numberline {I.1}Tests de performance de MongoDB}{48}{subsection.A.1.1}%
+\contentsline {subsection}{\numberline {I.2}Tests de performance de MySQL}{49}{subsection.A.1.2}%

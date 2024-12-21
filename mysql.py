@@ -622,7 +622,7 @@ def plot_operation_times( data:dict,step,test_type="test",test_name=""):
 		return
 
 	# On crée un dossier pour les graphiques
-	makedirs(f"plots/MongoDB/{test_type}/", exist_ok=True)
+	makedirs(f"plots/MySQL/{test_type}/", exist_ok=True)
 	
 	# On va créer un graphique qui contient les 4 opérations : insertion, lecture, mise à jour et suppression en même temps
 	fig, axes	= plt.subplots(2, 2, figsize=(12, 8))
@@ -789,7 +789,9 @@ def global_test_many(mysql: MySQL,plot_name :str, nb_data:int = num_records):
  
 	## Test de lecture de données
 	mysql.logger.debug("Test read all : ")
-	mysql.read(print_result=False)
+	# On lit les données où le champ "ran" est entre 0 et num_records_per_many
+	for i in range(0,num_records_per_many):
+		mysql.read_many({"ran" : i},print_result=False)
 
 	## Test de suppression de données
 	mysql.logger.debug("Test delete many : ")
@@ -1054,7 +1056,6 @@ def change_progression_text(text:str):
 		operation_Event.clear()
 		operation_Event.set()
 
-
 def print_progress(total,text="Running tests..."):
 	global operations_done, operation_Event, operation_lock
  
@@ -1096,7 +1097,6 @@ def clean_exit(progress_T:Thread, mysql_clients: list[MySQL | None] | None = Non
 	else:
 		print("End of tests")
 		exit(0)
-
 
 if __name__ == "__main__":
 
@@ -1172,7 +1172,7 @@ if __name__ == "__main__":
 		try:
 			mysql_standalone = MySQL(debug_level=INFO,dbg_file_mode=alone_dbg_mode)
 			change_progression_text("Tests en mode standalone...")
-			run_tests(mysql_standalone, "single_instance",steps=steps)
+			run_tests(mysql_standalone, "standalone",steps=steps)
 	
 		except Exception as e:
 			print(f"Erreur avec le test en standalone: {e}")

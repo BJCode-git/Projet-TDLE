@@ -58,7 +58,7 @@ operation_lock		= Lock()
 operation_Event		= Event()
 
 """
-Collection/Table "Books" :
+Collection/Table "test" :
 	id : Identifiant unique (UUID ou Auto-increment pour MySQL, ObjectId pour MongoDB)
 	title : Titre du livre (String)
 	author : Auteur du livre (String)

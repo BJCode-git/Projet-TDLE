@@ -12,6 +12,11 @@ echo "" > logs/mongodb-tests.log
 echo "" > logs/mysql.log
 echo "" > logs/mysql-tests.log
 
+############# Installation des dépendances python ############
+pip3 install -r requirements/generate_data-requirements.txt
+pip3 install -r requirements/mongo-requirements.txt
+pip3 install -r requirements/mysql-requirements.txt
+
 ################### Génération des données ###################
 python3 generate_data.py 						&&
 docker compose down -v --remove-orphans 		&&
@@ -43,5 +48,5 @@ docker compose down -v --remove-orphans 		&&
 
 ###### Test avec sharding ######
 docker compose up mysql-sharded-initiate 		&&
-python3 mysql.py --sharded 						&&
+python3 mysql.py --sharded						&&
 docker compose down -v --remove-orphans

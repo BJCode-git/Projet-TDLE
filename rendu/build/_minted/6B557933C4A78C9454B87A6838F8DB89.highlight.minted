@@ -1,0 +1,4 @@
+\begin{MintedVerbatim}[commandchars=\\\{\}]
+\PYG{+w}{    }docker\PYG{+w}{ }compose\PYG{+w}{ }up\PYG{+w}{ }start\PYGZus{}mysql\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}
+\PYG{+w}{    }python3\PYG{+w}{ }mysql.py
+\end{MintedVerbatim}

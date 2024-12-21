@@ -1,0 +1,53 @@
+\babel@toc {french}{}\relax 
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {3.1}{\ignorespaces Architecture Standalone.}}{12}{figure.caption.3}%
+\contentsline {figure}{\numberline {3.2}{\ignorespaces Architecture Replica Set.}}{12}{figure.caption.4}%
+\contentsline {figure}{\numberline {3.3}{\ignorespaces Architecture Sharded Cluster de MongoDB.}}{13}{figure.caption.5}%
+\contentsline {figure}{\numberline {3.4}{\ignorespaces Architecture MySQL Cluster.}}{14}{figure.caption.6}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {4.1}{\ignorespaces Distribution des performances des opérations CRUD uniques.}}{17}{figure.caption.7}%
+\contentsline {figure}{\numberline {4.2}{\ignorespaces Performances des opérations CRUD uniques selon la quantitée de données dans la base.}}{18}{figure.caption.8}%
+\contentsline {figure}{\numberline {4.3}{\ignorespaces Distribution des performances des opérations CRUD multiples.}}{19}{figure.caption.9}%
+\contentsline {figure}{\numberline {4.4}{\ignorespaces Performances des opérations CRUD multiples selon la quantitée de données dans la base.}}{19}{figure.caption.10}%
+\contentsline {figure}{\numberline {4.5}{\ignorespaces Distribution des performances des opérations CRUD uniques.}}{20}{figure.caption.11}%
+\contentsline {figure}{\numberline {4.6}{\ignorespaces Performances des opérations CRUD uniques selon la quantitée de données dans la base.}}{21}{figure.caption.12}%
+\contentsline {figure}{\numberline {4.7}{\ignorespaces Distribution des performances des opérations CRUD multiples.}}{22}{figure.caption.13}%
+\contentsline {figure}{\numberline {4.8}{\ignorespaces Performances des opérations CRUD multiples selon la quantitée de données dans la base.}}{22}{figure.caption.14}%
+\contentsline {figure}{\numberline {4.9}{\ignorespaces Distribution des performances des opérations CRUD uniques.}}{23}{figure.caption.15}%
+\contentsline {figure}{\numberline {4.10}{\ignorespaces Performances des opérations CRUD uniques selon la quantitée de données dans la base.}}{24}{figure.caption.16}%
+\contentsline {figure}{\numberline {4.11}{\ignorespaces Distribution des performances des opérations CRUD multiples.}}{24}{figure.caption.17}%
+\contentsline {figure}{\numberline {4.12}{\ignorespaces Performances des opérations CRUD multiples selon la quantitée de données dans la base.}}{25}{figure.caption.18}%
+\contentsline {figure}{\numberline {4.13}{\ignorespaces Distribution des performances des opérations CRUD uniques.}}{25}{figure.caption.19}%
+\contentsline {figure}{\numberline {4.14}{\ignorespaces Performances des opérations CRUD uniques selon la quantitée de données dans la base.}}{26}{figure.caption.20}%
+\contentsline {figure}{\numberline {4.15}{\ignorespaces Distribution des performances des opérations CRUD multiples.}}{26}{figure.caption.21}%
+\contentsline {figure}{\numberline {4.16}{\ignorespaces Performances des opérations CRUD multiples selon la quantitée de données dans la base.}}{27}{figure.caption.22}%
+\contentsline {figure}{\numberline {4.17}{\ignorespaces Distribution des performances des opérations CRUD uniques.}}{28}{figure.caption.23}%
+\contentsline {figure}{\numberline {4.18}{\ignorespaces Performances des opérations CRUD uniques selon la quantitée de données dans la base.}}{28}{figure.caption.24}%
+\contentsline {figure}{\numberline {4.19}{\ignorespaces Distribution des performances des opérations CRUD multiples.}}{29}{figure.caption.25}%
+\contentsline {figure}{\numberline {4.20}{\ignorespaces Performances des opérations CRUD multiples selon la quantitée de données dans la base.}}{29}{figure.caption.26}%
+\contentsline {figure}{\numberline {4.21}{\ignorespaces Distribution des performances des opérations CRUD uniques.}}{30}{figure.caption.27}%
+\contentsline {figure}{\numberline {4.22}{\ignorespaces Performances des opérations CRUD uniques selon la quantitée de données dans la base.}}{30}{figure.caption.28}%
+\contentsline {figure}{\numberline {4.23}{\ignorespaces Distribution des performances des opérations CRUD multiples.}}{31}{figure.caption.29}%
+\contentsline {figure}{\numberline {4.24}{\ignorespaces Performances des opérations CRUD multiples selon la quantitée de données dans la base.}}{31}{figure.caption.30}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {5.1}{\ignorespaces Distribution des performances des opérations CRUD uniques.}}{33}{figure.caption.31}%
+\contentsline {figure}{\numberline {5.2}{\ignorespaces Performances des opérations CRUD uniques selon la quantitée de données dans la base.}}{34}{figure.caption.32}%
+\contentsline {figure}{\numberline {5.3}{\ignorespaces Distribution des performances des opérations CRUD multiples.}}{34}{figure.caption.33}%
+\contentsline {figure}{\numberline {5.4}{\ignorespaces Performances des opérations CRUD multiples selon la quantitée de données dans la base.}}{35}{figure.caption.34}%
+\contentsline {figure}{\numberline {5.5}{\ignorespaces Distribution des performances des opérations CRUD uniques.}}{35}{figure.caption.35}%
+\contentsline {figure}{\numberline {5.6}{\ignorespaces Performances des opérations CRUD uniques selon la quantitée de données dans la base.}}{36}{figure.caption.36}%
+\contentsline {figure}{\numberline {5.7}{\ignorespaces Distribution des performances des opérations CRUD multiples.}}{36}{figure.caption.37}%
+\contentsline {figure}{\numberline {5.8}{\ignorespaces Performances des opérations CRUD multiples selon la quantitée de données dans la base.}}{37}{figure.caption.38}%
+\contentsline {figure}{\numberline {5.9}{\ignorespaces Distribution des performances des opérations CRUD uniques.}}{38}{figure.caption.39}%
+\contentsline {figure}{\numberline {5.10}{\ignorespaces Performances des opérations CRUD uniques selon la quantitée de données dans la base.}}{38}{figure.caption.40}%
+\contentsline {figure}{\numberline {5.11}{\ignorespaces Distribution des performances des opérations CRUD multiples.}}{39}{figure.caption.41}%
+\contentsline {figure}{\numberline {5.12}{\ignorespaces Performances des opérations CRUD multiples selon la quantitée de données dans la base.}}{39}{figure.caption.42}%
+\contentsline {figure}{\numberline {5.13}{\ignorespaces Distribution des performances des opérations CRUD uniques.}}{40}{figure.caption.43}%
+\contentsline {figure}{\numberline {5.14}{\ignorespaces Performances des opérations CRUD uniques selon la quantitée de données dans la base.}}{40}{figure.caption.44}%
+\contentsline {figure}{\numberline {5.15}{\ignorespaces Distribution des performances des opérations CRUD multiples.}}{41}{figure.caption.45}%
+\contentsline {figure}{\numberline {5.16}{\ignorespaces Performances des opérations CRUD multiples selon la quantitée de données dans la base.}}{41}{figure.caption.46}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
